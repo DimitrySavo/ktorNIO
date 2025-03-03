@@ -1,0 +1,64 @@
+package com.example.security
+
+import com.auth0.jwt.JWT
+import com.auth0.jwt.algorithms.Algorithm
+import com.example.daos.Users
+import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.*
+import io.ktor.server.auth.Authentication
+import io.ktor.server.auth.jwt.JWTPrincipal
+import io.ktor.server.auth.jwt.jwt
+import io.ktor.server.response.respond
+import org.jetbrains.exposed.sql.selectAll
+import org.jetbrains.exposed.sql.transactions.transaction
+import java.util.Date
+
+
+fun Application.configureSecurity() {
+
+    install(Authentication) {
+        jwt("auth-jwt") {
+            realm = JWTConfig.realm
+
+            verifier(JWT
+                .require(Algorithm.HMAC256(JWTConfig.secret))
+                .withAudience(JWTConfig.audience)
+                .withIssuer(JWTConfig.issuer)
+                .build()
+            )
+
+            validate { credential ->
+                val userId = credential.payload.getClaim("userId").asInt()
+                val user = transaction{
+                    Users.selectAll().where { Users.userId eq userId }.singleOrNull()
+                }
+                if(user != null) {
+                    JWTPrincipal(credential.payload)
+                } else {
+                    null
+                }
+            }
+
+            challenge { defaultScheme, realm ->
+                call.respond(HttpStatusCode.Unauthorized, "Invalid token")
+            }
+        }
+    }
+}
+
+
+object JWTConfig {
+    val secret = System.getenv("JWT_SECRET") ?: "secret"
+    val audience = "nio_users"
+    val issuer = "nio_user"
+    val realm = "nio_realm"
+
+    fun getToken(userId: Int) : String {
+        return JWT.create()
+            .withAudience(audience)
+            .withIssuer(issuer)
+            .withClaim("userId", userId)
+            .withExpiresAt(Date(System.currentTimeMillis() + 3600 * 1000)) // 1 hour
+            .sign(Algorithm.HMAC256(secret))
+    }
+}
