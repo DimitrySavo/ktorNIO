@@ -11,7 +11,7 @@ object Users: Table("users") {
     val username = varchar("username", 100)
     val userEmail = varchar("useremail", 255).nullable()
     val password = varchar("password", 255)
-    val authType = varchar("authtype" ,20)
+    val authType = integer("authtype").references(AuthTypesTable.authTypeId)
     val isApproved = bool("isapproved").default(false)
 
     override val primaryKey = PrimaryKey(userId)
@@ -71,8 +71,8 @@ object Users: Table("users") {
     }
 }
 
-enum class AuthTypes(val type: String) {
-    Local("local"),
-    Google("google"),
-    Vk("vk")
+enum class AuthTypes(val type: Int) {
+    Local(1),
+    Google(3),
+    Vk(2)
 }

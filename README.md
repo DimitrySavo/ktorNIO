@@ -45,3 +45,41 @@ If the server starts successfully, you'll see the following output:
 2024-12-04 14:32:45.682 [main] INFO  Application - Responding at http://0.0.0.0:8080
 ```
 
+
+
+## Database script
+
+```
+create table authtypes
+(
+    authtypeid   integer     not null
+        constraint authtypes_pk
+            primary key,
+    authtypename varchar(30) not null
+);
+
+alter table authtypes
+    owner to postgres;
+
+create table users
+(
+    userid     serial
+        primary key,
+    username   varchar(100)          not null,
+    useremail  varchar(255),
+    password   varchar(255),
+    authtype   integer               not null
+        constraint users_authtypes_authtypeid_fk
+            references authtypes,
+    isapproved boolean default false not null
+);
+
+alter table users
+    owner to postgres;
+
+
+insert into authtypes(authtypeid, authtypename) VALUES (1, 'local');
+insert into authtypes(authtypeid, authtypename) VALUES (2, 'vk');
+insert into authtypes(authtypeid, authtypename) VALUES (3, 'google');
+```
+

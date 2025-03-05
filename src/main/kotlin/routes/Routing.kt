@@ -13,11 +13,24 @@ import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.*
+import kotlin.text.Regex
 
 fun Application.configureRouting() {
     routing {
         post("/register/local") {
             val userRequest = call.receive<RegisterUser>()
+
+            if(userRequest.username == "") {
+                call.respond(HttpStatusCode.BadRequest)
+            }
+
+            if(userRequest.password == "") {
+                call.respond(HttpStatusCode.BadRequest)
+            }
+
+            if(userRequest.userEmail?.matches(Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\\\.[A-Za-z]{2,}\$")) ?: false) {
+                call.respond(HttpStatusCode.BadRequest)
+            }
 
             val userId = Users.createUser(
                 username = userRequest.username,
@@ -42,6 +55,14 @@ fun Application.configureRouting() {
 
         post("/login/local") {
             val loginRequest = call.receive<LoginUser>()
+
+            if(!loginRequest.userEmail.matches(Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\\\.[A-Za-z]{2,}\$"))) {
+                call.respond(HttpStatusCode.BadRequest)
+            }
+
+            if(loginRequest.password == "") {
+                call.respond(HttpStatusCode.BadRequest)
+            }
 
             val authResult = Users.verifyCredentials(loginRequest.userEmail, loginRequest.password)
             val userId = Users.getUserIdByEmail(loginRequest.userEmail)
