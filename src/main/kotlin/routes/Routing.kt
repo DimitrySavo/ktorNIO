@@ -18,17 +18,21 @@ import kotlin.text.Regex
 fun Application.configureRouting() {
     routing {
         post("/register/local") {
+            println("Get into rofls lol")
             val userRequest = call.receive<RegisterUser>()
 
             if(userRequest.username == "") {
+                println("username issue")
                 call.respond(HttpStatusCode.BadRequest)
             }
 
             if(userRequest.password == "") {
+                println("password issue")
                 call.respond(HttpStatusCode.BadRequest)
             }
 
-            if(userRequest.userEmail?.matches(Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\\\.[A-Za-z]{2,}\$")) ?: false) {
+            if(userRequest.userEmail?.matches(Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\$")) == false) {
+                println("email issue")
                 call.respond(HttpStatusCode.BadRequest)
             }
 
@@ -42,6 +46,8 @@ fun Application.configureRouting() {
             if(userId != null) {
                 val token = JWTConfig.getToken(userId)
                 call.respond(HttpStatusCode.Created, mapOf("token" to token))
+            } else {
+                call.respond(HttpStatusCode.Conflict)
             }
         }
 
@@ -56,7 +62,7 @@ fun Application.configureRouting() {
         post("/login/local") {
             val loginRequest = call.receive<LoginUser>()
 
-            if(!loginRequest.userEmail.matches(Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\\\.[A-Za-z]{2,}\$"))) {
+            if(!loginRequest.userEmail.matches(Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\$"))) {
                 call.respond(HttpStatusCode.BadRequest)
             }
 
