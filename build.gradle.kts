@@ -37,6 +37,10 @@ dependencies {
     // https://mvnrepository.com/artifact/org.jetbrains.exposed/exposed-java-time
     implementation("org.jetbrains.exposed:exposed-java-time:0.60.0")
 
+    // https://mvnrepository.com/artifact/io.minio/minio
+    implementation("io.minio:minio:8.5.17")
+
+
 
     implementation("io.ktor:ktor-server-core")
     implementation("io.ktor:ktor-server-auth")

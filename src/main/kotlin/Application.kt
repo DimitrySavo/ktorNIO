@@ -1,5 +1,6 @@
 package com.example
 
+import com.example.data.configureMinio
 import com.example.database.initDatabase
 import com.example.routes.configureRouting
 import com.example.routes.configureSockets
@@ -18,6 +19,7 @@ fun Application.module() {
     }
 
     initDatabase()
+    configureMinio()
     configureSecurity()
     configureSockets()
     configureFrameworks()

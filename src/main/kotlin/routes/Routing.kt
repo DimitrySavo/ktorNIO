@@ -6,6 +6,7 @@ import com.example.RegisterUser
 import com.example.daos.AuthTypes
 import com.example.daos.StorageItemsNames
 import com.example.daos.Users
+import com.example.handlers.userItemCreationHandler
 import com.example.security.JWTConfig
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.*
@@ -104,19 +105,19 @@ fun Application.configureRouting() {
                 val userId = principal?.payload?.getClaim("userId")?.asInt()
 
                 if(userId != null) {
-                    val createInstance = call.receive<CreateObject>()
-
-                    when(createInstance.type) {
-                        StorageItemsNames.MD -> {
-
-                        }
-
-                        StorageItemsNames.FOLDER -> {
-
-                        }
+                    try {
+                        val createInstance = call.receive<CreateObject>()
+                        userItemCreationHandler(createInstance, userId)
+                        call.respond(HttpStatusCode.Created)
+                        return@post
+                    } catch (ex: Exception) {
+                        println("Get and exception: ${ex.message}")
+                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to ex.message))
+                        return@post
                     }
-                } else {
 
+                } else {
+                    call.respond(HttpStatusCode.Unauthorized, "Bad credentials")
                 }
             }
         }

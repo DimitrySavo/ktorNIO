@@ -12,3 +12,8 @@ object StorageItemsNames {
     const val MD = "md"
     const val FOLDER = "folder"
 }
+
+enum class StorageItemsIds(val id: Int, val mimeType: String) {
+    md(1, "text/markdown"),
+    folder(2, "")
+}
