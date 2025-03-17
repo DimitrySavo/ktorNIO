@@ -1,8 +1,10 @@
 package com.example.routes
 
+import com.example.CreateObject
 import com.example.LoginUser
 import com.example.RegisterUser
 import com.example.daos.AuthTypes
+import com.example.daos.StorageItemsNames
 import com.example.daos.Users
 import com.example.security.JWTConfig
 import io.ktor.http.HttpStatusCode
@@ -24,16 +26,19 @@ fun Application.configureRouting() {
             if(userRequest.username == "") {
                 println("username issue")
                 call.respond(HttpStatusCode.BadRequest)
+                return@post
             }
 
             if(userRequest.password == "") {
                 println("password issue")
                 call.respond(HttpStatusCode.BadRequest)
+                return@post
             }
 
             if(userRequest.userEmail?.matches(Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\$")) == false) {
                 println("email issue")
                 call.respond(HttpStatusCode.BadRequest)
+                return@post
             }
 
             val userId = Users.createUser(
@@ -48,6 +53,7 @@ fun Application.configureRouting() {
                 call.respond(HttpStatusCode.Created, mapOf("token" to token))
             } else {
                 call.respond(HttpStatusCode.Conflict)
+                return@post
             }
         }
 
@@ -90,6 +96,27 @@ fun Application.configureRouting() {
                     call.respond(HttpStatusCode.OK, mapOf("userId" to userId))
                 } else {
                     call.respond(HttpStatusCode.Unauthorized, "Bad credentials")
+                }
+            }
+
+            post("/create") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal?.payload?.getClaim("userId")?.asInt()
+
+                if(userId != null) {
+                    val createInstance = call.receive<CreateObject>()
+
+                    when(createInstance.type) {
+                        StorageItemsNames.MD -> {
+
+                        }
+
+                        StorageItemsNames.FOLDER -> {
+
+                        }
+                    }
+                } else {
+
                 }
             }
         }

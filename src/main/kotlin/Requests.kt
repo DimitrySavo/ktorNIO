@@ -14,3 +14,10 @@ data class LoginUser(
     val userEmail: String,
     val password: String
 )
+
+@Serializable
+data class CreateObject(
+    val type: String,
+    val data: String
+)
+

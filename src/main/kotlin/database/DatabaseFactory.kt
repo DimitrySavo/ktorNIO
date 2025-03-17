@@ -11,7 +11,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 class DatabaseFactory {
     fun init() {
         val hikariConfig = HikariConfig().apply {
-            jdbcUrl = "jdbc:postgresql://localhost:5432/NIOServer"
+            jdbcUrl = "jdbc:postgresql://postgres:5432/nioserver"
             driverClassName = "org.postgresql.Driver"
             username = "postgres"
             password = "zxc_ghoul"

@@ -34,6 +34,10 @@ dependencies {
     // https://mvnrepository.com/artifact/org.mindrot/jbcrypt
     implementation("org.mindrot:jbcrypt:0.4")
 
+    // https://mvnrepository.com/artifact/org.jetbrains.exposed/exposed-java-time
+    implementation("org.jetbrains.exposed:exposed-java-time:0.60.0")
+
+
     implementation("io.ktor:ktor-server-core")
     implementation("io.ktor:ktor-server-auth")
     implementation("io.ktor:ktor-server-auth-jwt")
