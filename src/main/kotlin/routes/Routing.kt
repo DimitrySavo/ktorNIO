@@ -4,10 +4,13 @@ import com.example.CreateObject
 import com.example.FunctionResult
 import com.example.LoginUser
 import com.example.RegisterUser
+import com.example.UpdateObject
 import com.example.daos.AuthTypes
+import com.example.daos.StorageItemsIds
 import com.example.daos.StorageItemsNames
 import com.example.daos.Users
 import com.example.handlers.handleItemDelete
+import com.example.handlers.updateHandler
 import com.example.handlers.userItemCreationHandler
 import com.example.security.JWTConfig
 import io.ktor.http.HttpStatusCode
@@ -139,6 +142,49 @@ fun Application.configureRouting() {
                         is FunctionResult.Error -> call.respond(HttpStatusCode.InternalServerError, mapOf("error" to result.message))
                     }
                     return@delete
+                } catch (ex: Exception) {
+                    println("Get an exception: ${ex.message}")
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to ex.message))
+                }
+            }
+
+            put("/test") {
+                println("Get into rofls lol")
+                call.respond(HttpStatusCode.OK)
+            }
+
+            put("/update/{uid}"){
+                println("Get into put")
+
+                val uidParameter = call.parameters["uid"]
+                val updateInstance = call.receive<UpdateObject>()
+                val type = StorageItemsIds.entries.firstOrNull { it.name.equals(updateInstance.type, ignoreCase = true) }
+
+                if (type == null) {
+                    call.respond(HttpStatusCode.BadRequest, "Bad type")
+                    return@put
+                }
+
+                if(uidParameter == null) {
+                    call.respond(HttpStatusCode.BadRequest, "Missing uid parameter")
+                    return@put
+                }
+
+                try {
+                    val uid = UUID.fromString(uidParameter)
+
+                    val result = updateHandler(
+                        instance = updateInstance,
+                        uid = uid,
+                        type = type
+                    )
+
+                    when (result) {
+                        is FunctionResult.Success -> call.respond(HttpStatusCode.OK, mapOf("uid" to uid.toString()))
+                        is FunctionResult.Error -> call.respond(HttpStatusCode.BadRequest, mapOf("error" to result.message))
+                    }
+
+                    return@put
                 } catch (ex: Exception) {
                     println("Get an exception: ${ex.message}")
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to ex.message))

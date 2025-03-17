@@ -49,6 +49,29 @@ fun createFileInMinio(uid: UUID, type: StorageItemsIds): FunctionResult<Unit> {
     }
 }
 
+fun replaceFileMinio(uid: UUID, type: StorageItemsIds, content: String): FunctionResult<Unit> {
+    return try {
+        val bucket = MinIOFactory.bucketName
+        val uidString = uid.toString()
+        val contentBytes = content.toByteArray()
+
+        MinIOFactory.minio.putObject(
+            PutObjectArgs.builder()
+                .bucket(bucket)
+                .`object`(uidString)
+                .stream(ByteArrayInputStream(contentBytes), contentBytes.size.toLong(), -1)
+                .contentType(type.mimeType)
+                .build()
+        )
+
+        println("Updated file in minio successfully")
+        FunctionResult.Success(Unit)
+    } catch (ex: Exception) {
+        println("Error while updating")
+        FunctionResult.Error("Error while updating")
+    }
+}
+
 
 fun Application.configureMinio() {
     try {

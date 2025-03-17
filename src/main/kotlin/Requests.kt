@@ -45,3 +45,17 @@ data class ItemObject(
     val parent_id: UUID? = null,
     val name: String
 )
+
+@Serializable
+data class UpdateObject(
+    val type: String,
+    val data: UpdateItem
+)
+
+@Serializable
+data class UpdateItem (
+    val fileContent: String? = null,
+    val name: String? = null,
+    @Serializable(with = UUIDSerializer::class)
+    val parent_id: UUID? = null
+)
