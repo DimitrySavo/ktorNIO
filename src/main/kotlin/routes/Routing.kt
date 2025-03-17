@@ -1,11 +1,13 @@
 package com.example.routes
 
 import com.example.CreateObject
+import com.example.FunctionResult
 import com.example.LoginUser
 import com.example.RegisterUser
 import com.example.daos.AuthTypes
 import com.example.daos.StorageItemsNames
 import com.example.daos.Users
+import com.example.handlers.handleItemDelete
 import com.example.handlers.userItemCreationHandler
 import com.example.security.JWTConfig
 import io.ktor.http.HttpStatusCode
@@ -16,6 +18,7 @@ import io.ktor.server.auth.principal
 import io.ktor.server.request.receive
 import io.ktor.server.response.respond
 import io.ktor.server.routing.*
+import java.util.UUID
 import kotlin.text.Regex
 
 fun Application.configureRouting() {
@@ -118,6 +121,27 @@ fun Application.configureRouting() {
 
                 } else {
                     call.respond(HttpStatusCode.Unauthorized, "Bad credentials")
+                }
+            }
+
+            delete("/delete/{uid}") {
+                val uidParameter = call.parameters["uid"]
+                if(uidParameter == null) {
+                    call.respond(HttpStatusCode.BadRequest, "Missing uid parameter")
+                    return@delete
+                }
+
+                try {
+                    val uid = UUID.fromString(uidParameter)
+
+                    when(val result = handleItemDelete(uid)) {
+                        is FunctionResult.Success -> call.respond(HttpStatusCode.OK, mapOf("uid" to uid.toString()))
+                        is FunctionResult.Error -> call.respond(HttpStatusCode.InternalServerError, mapOf("error" to result.message))
+                    }
+                    return@delete
+                } catch (ex: Exception) {
+                    println("Get an exception: ${ex.message}")
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to ex.message))
                 }
             }
         }
