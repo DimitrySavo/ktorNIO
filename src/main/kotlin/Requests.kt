@@ -59,3 +59,14 @@ data class UpdateItem (
     @Serializable(with = UUIDSerializer::class)
     val parent_id: UUID? = null
 )
+
+@Serializable
+data class StorageItemResponse (
+    @Serializable(with = UUIDSerializer::class)
+    val uid: UUID,
+    @Serializable(with = UUIDSerializer::class)
+    val parent_id: UUID?,
+    val name: String,
+    val type: String,
+    val content: String
+)

@@ -1,15 +1,16 @@
 package com.example.daos
 
 import com.example.FunctionResult
-import com.example.data.MinIOFactory
+import com.example.StorageItemResponse
 import com.example.data.createFileInMinio
+import com.example.data.readFromFile
 import com.example.data.replaceFileMinio
 import org.jetbrains.exposed.sql.Table
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.javatime.timestamp
+import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import org.jetbrains.exposed.sql.update
-import java.awt.dnd.MouseDragGestureRecognizer
 import java.security.MessageDigest
 import java.sql.SQLException
 import java.time.Instant
@@ -122,6 +123,47 @@ object UserItemsTable : Table("useritems") {
             println("Exception in updateItem: ${ex.message}")
             FunctionResult.Error("Exception: ${ex.message}")
         }
+    }
+
+    fun getUserItems(userId: Int): FunctionResult<List<StorageItemResponse>> {
+        return try {
+            val items = transaction {
+                (UserItemsTable innerJoin StorageItemsTypesTable)
+                    .selectAll()
+                    .where { UserItemsTable.owner_id eq userId }
+                    .map { row ->
+                        val uid = row[UserItemsTable.uid]
+                        val parentId = row[UserItemsTable.parent_id]
+                        val name = row[UserItemsTable.name]
+                        val typeName = row[StorageItemsTypesTable.typeName]
+
+                        val content = if (row[UserItemsTable.type] == StorageItemsIds.md.id) {
+                            try {
+                                readFromFile(uid.toString())
+                            } catch (ex: Exception) {
+                                println("Error reading file")
+                                ""
+                            }
+                        } else {
+                            ""
+                        }
+
+                        StorageItemResponse(
+                            uid = uid,
+                            parent_id = parentId,
+                            name = name,
+                            type = typeName,
+                            content = content
+                        )
+                    }
+            }
+
+            FunctionResult.Success(items)
+        } catch (ex: Exception) {
+            println("Get an exception ${ex.message}")
+            FunctionResult.Error(ex.toString())
+        }
+
     }
 
     fun computeHashVersion(content: String) : String {

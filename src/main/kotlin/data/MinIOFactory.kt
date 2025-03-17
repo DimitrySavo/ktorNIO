@@ -4,6 +4,7 @@ import com.example.FunctionResult
 import com.example.daos.StorageItemsIds
 import io.ktor.server.application.Application
 import io.minio.BucketExistsArgs
+import io.minio.GetObjectArgs
 import io.minio.MakeBucketArgs
 import io.minio.MinioClient
 import io.minio.PutObjectArgs
@@ -72,6 +73,16 @@ fun replaceFileMinio(uid: UUID, type: StorageItemsIds, content: String): Functio
     }
 }
 
+fun readFromFile(uid: String) : String {
+    val stream = MinIOFactory.minio.getObject(
+        GetObjectArgs.builder()
+            .bucket(MinIOFactory.bucketName)
+            .`object`(uid.toString())
+            .build()
+    )
+    return stream.bufferedReader().use { it.readText() }
+}
+
 
 fun Application.configureMinio() {
     try {
@@ -89,3 +100,4 @@ fun Application.configureMinio() {
         println("Error while creating bucket: ${e.message}")
     }
 }
+

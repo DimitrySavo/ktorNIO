@@ -8,6 +8,7 @@ import com.example.UpdateObject
 import com.example.daos.AuthTypes
 import com.example.daos.StorageItemsIds
 import com.example.daos.StorageItemsNames
+import com.example.daos.UserItemsTable
 import com.example.daos.Users
 import com.example.handlers.handleItemDelete
 import com.example.handlers.updateHandler
@@ -185,6 +186,36 @@ fun Application.configureRouting() {
                     }
 
                     return@put
+                } catch (ex: Exception) {
+                    println("Get an exception: ${ex.message}")
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to ex.message))
+                }
+            }
+
+            get("/items/{userId}"){
+                val userIdParam = call.parameters["userId"]
+
+                if (userIdParam == null) {
+                    call.respond(HttpStatusCode.BadRequest, "Missing userId parameter")
+                    return@get
+                }
+
+                val userId = try {
+                    userIdParam.toInt()
+                } catch (ex: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, "Invalid userId format")
+                    return@get
+                }
+
+                try {
+                    val result = UserItemsTable.getUserItems(userId)
+
+                    when (result) {
+                        is FunctionResult.Error -> call.respond(HttpStatusCode.BadRequest, mapOf("error" to result.message))
+                        is FunctionResult.Success -> call.respond(HttpStatusCode.OK, result.data)
+                    }
+
+                    return@get
                 } catch (ex: Exception) {
                     println("Get an exception: ${ex.message}")
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to ex.message))
