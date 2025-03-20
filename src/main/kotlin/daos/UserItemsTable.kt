@@ -63,6 +63,26 @@ object UserItemsTable : Table("useritems") {
         }
     }
 
+    fun getItemVersion(uid: UUID): FunctionResult<String> {
+        return try {
+            val version = transaction {
+                UserItemsTable
+                    .select(UserItemsTable.version)
+                    .where { UserItemsTable.uid eq uid  }
+                    .singleOrNull()
+                    ?.get(UserItemsTable.version)
+            }
+
+            if(version == null) {
+                FunctionResult.Error("Version is null")
+            } else {
+                FunctionResult.Success(version.toString())
+            }
+        } catch (ex: Exception) {
+            FunctionResult.Error("Get an error ${ex.message}")
+        }
+    }
+
     fun softItemDeletion(uid: UUID) : FunctionResult<Unit> {
         return try {
             transaction {
@@ -137,23 +157,11 @@ object UserItemsTable : Table("useritems") {
                         val name = row[UserItemsTable.name]
                         val typeName = row[StorageItemsTypesTable.typeName]
 
-                        val content = if (row[UserItemsTable.type] == StorageItemsIds.md.id) {
-                            try {
-                                readFromFile(uid.toString())
-                            } catch (ex: Exception) {
-                                println("Error reading file")
-                                ""
-                            }
-                        } else {
-                            ""
-                        }
-
                         StorageItemResponse(
                             uid = uid,
                             parent_id = parentId,
                             name = name,
-                            type = typeName,
-                            content = content
+                            type = typeName
                         )
                     }
             }

@@ -68,5 +68,10 @@ data class StorageItemResponse (
     val parent_id: UUID?,
     val name: String,
     val type: String,
+)
+
+@Serializable
+data class ItemContent(
+    val version: String,
     val content: String
 )

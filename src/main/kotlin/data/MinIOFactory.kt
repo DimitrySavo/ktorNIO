@@ -28,6 +28,7 @@ object MinIOFactory {
     }
 }
 
+
 fun createFileInMinio(uid: UUID, type: StorageItemsIds): FunctionResult<Unit> {
     return try {
         val bucket = MinIOFactory.bucketName
@@ -73,14 +74,19 @@ fun replaceFileMinio(uid: UUID, type: StorageItemsIds, content: String): Functio
     }
 }
 
-fun readFromFile(uid: String) : String {
-    val stream = MinIOFactory.minio.getObject(
-        GetObjectArgs.builder()
-            .bucket(MinIOFactory.bucketName)
-            .`object`(uid.toString())
-            .build()
-    )
-    return stream.bufferedReader().use { it.readText() }
+fun readFromFile(uid: String) : FunctionResult<String> {
+    return try {
+        val stream = MinIOFactory.minio.getObject(
+            GetObjectArgs.builder()
+                .bucket(MinIOFactory.bucketName)
+                .`object`(uid.toString())
+                .build()
+        )
+
+        FunctionResult.Success(stream.bufferedReader().use { it.readText() })
+    } catch (ex: Exception) {
+        FunctionResult.Error("Error while reading from file")
+    }
 }
 
 

@@ -10,6 +10,7 @@ import com.example.daos.StorageItemsIds
 import com.example.daos.StorageItemsNames
 import com.example.daos.UserItemsTable
 import com.example.daos.Users
+import com.example.handlers.getUserItemContent
 import com.example.handlers.handleItemDelete
 import com.example.handlers.updateHandler
 import com.example.handlers.userItemCreationHandler
@@ -212,6 +213,31 @@ fun Application.configureRouting() {
 
                     when (result) {
                         is FunctionResult.Error -> call.respond(HttpStatusCode.BadRequest, mapOf("error" to result.message))
+                        is FunctionResult.Success -> call.respond(HttpStatusCode.OK, result.data)
+                    }
+
+                    return@get
+                } catch (ex: Exception) {
+                    println("Get an exception: ${ex.message}")
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to ex.message))
+                }
+            }
+
+            get("/items/{userId}/{itemUid}") {
+                val itemUidParam = call.parameters["itemUid"]
+
+                val itemUid = try {
+                    UUID.fromString(itemUidParam)
+                } catch (ex: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, "Invalid item uid format")
+                    return@get
+                }
+
+                try {
+                    val result = getUserItemContent(itemUid)
+
+                    when(result) {
+                        is FunctionResult.Error -> call.respond(HttpStatusCode.NotFound, mapOf("error" to result.message))
                         is FunctionResult.Success -> call.respond(HttpStatusCode.OK, result.data)
                     }
 
