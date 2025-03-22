@@ -59,7 +59,8 @@ fun Application.configureRouting() {
 
             if(userId != null) {
                 val token = JWTConfig.getToken(userId)
-                call.respond(HttpStatusCode.Created, mapOf("token" to token))
+                val refreshToken = JWTConfig.getRefreshToken(userId)
+                call.respond(HttpStatusCode.OK, mapOf("token" to token, "refresh token" to refreshToken))
             } else {
                 call.respond(HttpStatusCode.Conflict)
                 return@post
@@ -90,9 +91,24 @@ fun Application.configureRouting() {
 
             if(authResult == true && userId != null) {
                 val token = JWTConfig.getToken(userId)
-                call.respond(HttpStatusCode.OK, mapOf("token" to token))
+                val refreshToken = JWTConfig.getRefreshToken(userId)
+                call.respond(HttpStatusCode.OK, mapOf("token" to token, "refresh token" to refreshToken))
             } else {
                 call.respond(HttpStatusCode.Unauthorized, "Bad credentials")
+            }
+        }
+
+        authenticate("refresh-jwt") {
+            get("/refresh") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal?.payload?.getClaim("userId")?.asInt()
+
+                if(userId != null) {
+                    val token = JWTConfig.getToken(userId)
+                    call.respond(HttpStatusCode.OK, mapOf("token" to token))
+                } else {
+                    call.respond(HttpStatusCode.Unauthorized, "Bad credentials")
+                }
             }
         }
 

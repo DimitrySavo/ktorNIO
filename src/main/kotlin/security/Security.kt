@@ -43,12 +43,40 @@ fun Application.configureSecurity() {
                 call.respond(HttpStatusCode.Unauthorized, "Invalid token")
             }
         }
+
+        jwt("refresh-jwt") {
+            realm = JWTConfig.realm
+
+            verifier(JWT
+                .require(Algorithm.HMAC256(JWTConfig.refreshSecret))
+                .withAudience(JWTConfig.audience)
+                .withIssuer(JWTConfig.issuer)
+                .build()
+            )
+
+            validate { credential ->
+                val userId = credential.payload.getClaim("userId").asInt()
+                val user = transaction{
+                    Users.selectAll().where { Users.userId eq userId }.singleOrNull()
+                }
+                if(user != null) {
+                    JWTPrincipal(credential.payload)
+                } else {
+                    null
+                }
+            }
+
+            challenge { defaultScheme, realm ->
+                call.respond(HttpStatusCode.Unauthorized, "Invalid token")
+            }
+        }
     }
 }
 
 
 object JWTConfig {
     val secret = System.getenv("JWT_SECRET") ?: "secret"
+    val refreshSecret = System.getenv("JWT_REFRESH") ?:"refreshSecret"
     val audience = "nio_users"
     val issuer = "nio_user"
     val realm = "nio_realm"
@@ -60,5 +88,14 @@ object JWTConfig {
             .withClaim("userId", userId)
             .withExpiresAt(Date(System.currentTimeMillis() + 3600 * 1000)) // 1 hour
             .sign(Algorithm.HMAC256(secret))
+    }
+
+    fun getRefreshToken(userId: Int) : String {
+        return JWT.create()
+            .withAudience(audience)
+            .withIssuer(issuer)
+            .withClaim("userId", userId)
+            .withExpiresAt(Date(System.currentTimeMillis() + 24 * 24 * 3600 * 1000))
+            .sign(Algorithm.HMAC256(refreshSecret))
     }
 }
