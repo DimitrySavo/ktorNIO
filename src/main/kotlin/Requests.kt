@@ -68,6 +68,9 @@ data class StorageItemResponse (
     val parent_id: UUID?,
     val name: String,
     val type: String,
+    val created_at: Long,
+    val updated_at: Long,
+    val deleted_at: Long? = null
 )
 
 @Serializable
