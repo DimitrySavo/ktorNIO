@@ -3,14 +3,10 @@ package com.example.daos
 import com.example.FunctionResult
 import com.example.StorageItemResponse
 import com.example.data.createFileInMinio
-import com.example.data.readFromFile
 import com.example.data.replaceFileMinio
-import org.jetbrains.exposed.sql.Table
-import org.jetbrains.exposed.sql.insert
+import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.javatime.timestamp
-import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
-import org.jetbrains.exposed.sql.update
 import java.security.MessageDigest
 import java.sql.SQLException
 import java.time.Instant
@@ -25,7 +21,7 @@ object UserItemsTable : Table("useritems") {
     val owner_id = integer("owner_id").references(Users.userId)
     val created_at = timestamp("created_at")
     val updated_at = timestamp("updated_at")
-    val deleted_at = timestamp("deleted_at")
+    val deleted_at = timestamp("deleted_at").nullable()
 
     fun createItem(
         uid: UUID,
@@ -145,33 +141,60 @@ object UserItemsTable : Table("useritems") {
         }
     }
 
+    private fun ResultRow.toStorageItemResponse(): StorageItemResponse {
+        println("Row is: $this")
+        return StorageItemResponse(
+            uid = this[UserItemsTable.uid],
+            parent_id = this[UserItemsTable.parent_id],
+            name = this[UserItemsTable.name],
+            type = this[StorageItemsTypesTable.typeName],
+            created_at = this[UserItemsTable.created_at].epochSecond,
+            updated_at = this[UserItemsTable.updated_at].epochSecond,
+            deleted_at = this[UserItemsTable.deleted_at]?.epochSecond
+        )
+    }
+
     fun getUserItems(userId: Int): FunctionResult<List<StorageItemResponse>> {
         return try {
+            val rawRows = transaction {
+                (UserItemsTable innerJoin StorageItemsTypesTable)
+                    .selectAll()
+                    .where { (UserItemsTable.owner_id eq userId) and (UserItemsTable.deleted_at.isNull()) }
+                    .toList()
+            }
+
+            println("Raw rows: $rawRows")
+
             val items = transaction {
                 (UserItemsTable innerJoin StorageItemsTypesTable)
                     .selectAll()
-                    .where { UserItemsTable.owner_id eq userId }
-                    .map { row ->
-                        val uid = row[UserItemsTable.uid]
-                        val parentId = row[UserItemsTable.parent_id]
-                        val name = row[UserItemsTable.name]
-                        val typeName = row[StorageItemsTypesTable.typeName]
-
-                        StorageItemResponse(
-                            uid = uid,
-                            parent_id = parentId,
-                            name = name,
-                            type = typeName
-                        )
-                    }
+                    .where { (UserItemsTable.owner_id eq userId) and (UserItemsTable.deleted_at.isNull()) }
+                    .map { row -> row.toStorageItemResponse() }
             }
+            println(items.toString())
 
             FunctionResult.Success(items)
         } catch (ex: Exception) {
             println("Get an exception ${ex.message}")
             FunctionResult.Error(ex.toString())
         }
+    }
 
+    fun getDeletedUserItems(userId: Int): FunctionResult<List<StorageItemResponse>> {
+        return try {
+            val items = transaction {
+                (UserItemsTable innerJoin StorageItemsTypesTable)
+                    .selectAll()
+                    .where { (UserItemsTable.owner_id eq userId) and (UserItemsTable.deleted_at.isNotNull()) }
+                    .map { row -> row.toStorageItemResponse() }
+            }
+            println(items.toString())
+
+            FunctionResult.Success(items)
+        } catch (ex: Exception) {
+            println("Get an exception ${ex.message}")
+            FunctionResult.Error(ex.toString())
+        }
     }
 
     fun computeHashVersion(content: String) : String {

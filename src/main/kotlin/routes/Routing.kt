@@ -131,8 +131,13 @@ fun Application.configureRouting() {
                 if(userId != null) {
                     try {
                         val createInstance = call.receive<CreateObject>()
-                        userItemCreationHandler(createInstance, userId)
-                        call.respond(HttpStatusCode.Created)
+                        val result = userItemCreationHandler(createInstance, userId)
+
+                        when (result) {
+                            is FunctionResult.Error -> call.respond(HttpStatusCode.BadRequest, mapOf("error" to result.message))
+                            is FunctionResult.Success<*> -> call.respond(HttpStatusCode.Created)
+                        }
+
                         return@post
                     } catch (ex: Exception) {
                         println("Get and exception: ${ex.message}")
@@ -225,6 +230,7 @@ fun Application.configureRouting() {
                 }
 
                 try {
+                    println("get in user items")
                     val result = UserItemsTable.getUserItems(userId)
 
                     when (result) {
@@ -254,6 +260,36 @@ fun Application.configureRouting() {
 
                     when(result) {
                         is FunctionResult.Error -> call.respond(HttpStatusCode.NotFound, mapOf("error" to result.message))
+                        is FunctionResult.Success -> call.respond(HttpStatusCode.OK, result.data)
+                    }
+
+                    return@get
+                } catch (ex: Exception) {
+                    println("Get an exception: ${ex.message}")
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to ex.message))
+                }
+            }
+
+            get("/items/deleted/{userId}") {
+                val userIdParam = call.parameters["userId"]
+
+                if (userIdParam == null) {
+                    call.respond(HttpStatusCode.BadRequest, "Missing userId parameter")
+                    return@get
+                }
+
+                val userId = try {
+                    userIdParam.toInt()
+                } catch (ex: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, "Invalid userId format")
+                    return@get
+                }
+
+                try {
+                    val result = UserItemsTable.getDeletedUserItems(userId)
+
+                    when (result) {
+                        is FunctionResult.Error -> call.respond(HttpStatusCode.BadRequest, mapOf("error" to result.message))
                         is FunctionResult.Success -> call.respond(HttpStatusCode.OK, result.data)
                     }
 

@@ -1,11 +1,12 @@
 package com.example.handlers
 
 import com.example.CreateObject
+import com.example.FunctionResult
 import com.example.daos.StorageItemsIds
 import com.example.daos.UserItemsTable
 
-fun userItemCreationHandler(instance: CreateObject, ownerId: Int) {
-    when (instance.type) {
+fun userItemCreationHandler(instance: CreateObject, ownerId: Int) : FunctionResult<String> {
+    return when (instance.type) {
         StorageItemsIds.md.name -> {
             UserItemsTable.createItem(
                 uid = instance.data.uid,
@@ -24,6 +25,10 @@ fun userItemCreationHandler(instance: CreateObject, ownerId: Int) {
                 name = instance.data.name,
                 type = StorageItemsIds.folder
             )
+        }
+
+        else -> {
+            FunctionResult.Error("Unknown type")
         }
     }
 }
