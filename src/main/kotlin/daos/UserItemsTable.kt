@@ -82,7 +82,16 @@ object UserItemsTable : Table("useritems") {
     fun softItemDeletion(uid: UUID) : FunctionResult<Unit> {
         return try {
             transaction {
-                update({ UserItemsTable.uid eq uid }) {
+                val childItems = UserItemsTable
+                    .select(UserItemsTable.uid)
+                    .where { UserItemsTable.parent_id eq uid }
+                    .map { it[UserItemsTable.uid] }
+
+                childItems.forEach {
+                    softItemDeletion(it)
+                }
+
+                UserItemsTable.update({ UserItemsTable.uid eq uid }) {
                     it[deleted_at] = Instant.now()
                 }
             }
@@ -139,6 +148,12 @@ object UserItemsTable : Table("useritems") {
             println("Exception in updateItem: ${ex.message}")
             FunctionResult.Error("Exception: ${ex.message}")
         }
+    }
+
+    fun updateItemWithVersion(
+
+    ): FunctionResult<Unit> {
+        return FunctionResult.Success(Unit)
     }
 
     private fun ResultRow.toStorageItemResponse(): StorageItemResponse {
