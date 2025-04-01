@@ -53,6 +53,17 @@ data class UpdateObject(
 )
 
 @Serializable
+data class UpdateObjectWithVersion(
+    val name: String,
+    @Serializable(with = UUIDSerializer::class)
+    val parentId: UUID? = null,
+    val version: String,
+    val baseline: String,
+    val modifiedText: String,
+    val type: String
+)
+
+@Serializable
 data class UpdateItem (
     val fileContent: String? = null,
     val name: String? = null,

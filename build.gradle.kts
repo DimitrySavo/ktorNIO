@@ -40,7 +40,8 @@ dependencies {
     // https://mvnrepository.com/artifact/io.minio/minio
     implementation("io.minio:minio:8.5.17")
 
-
+    //https://github.com/google/diff-match-patch
+    implementation("org.bitbucket.cowwoc:diff-match-patch:1.2")
 
     implementation("io.ktor:ktor-server-core")
     implementation("io.ktor:ktor-server-auth")

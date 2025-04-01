@@ -3,7 +3,9 @@ package com.example.daos
 import com.example.FunctionResult
 import com.example.StorageItemResponse
 import com.example.data.createFileInMinio
+import com.example.data.readFromFile
 import com.example.data.replaceFileMinio
+import org.bitbucket.cowwoc.diffmatchpatch.DiffMatchPatch
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.javatime.timestamp
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -62,11 +64,10 @@ object UserItemsTable : Table("useritems") {
     fun getItemVersion(uid: UUID): FunctionResult<String> {
         return try {
             val version = transaction {
-                UserItemsTable
-                    .select(UserItemsTable.version)
+                select(version)
                     .where { UserItemsTable.uid eq uid  }
                     .singleOrNull()
-                    ?.get(UserItemsTable.version)
+                    ?.get(version)
             }
 
             if(version == null) {
@@ -82,9 +83,8 @@ object UserItemsTable : Table("useritems") {
     fun softItemDeletion(uid: UUID) : FunctionResult<Unit> {
         return try {
             transaction {
-                val childItems = UserItemsTable
-                    .select(UserItemsTable.uid)
-                    .where { UserItemsTable.parent_id eq uid }
+                val childItems = select(UserItemsTable.uid)
+                    .where { parent_id eq uid }
                     .map { it[UserItemsTable.uid] }
 
                 childItems.forEach {
@@ -130,15 +130,15 @@ object UserItemsTable : Table("useritems") {
 
             transaction {
                 UserItemsTable.update({ UserItemsTable.uid eq uid }) { row ->
-                    row[UserItemsTable.updated_at] = Instant.now()
+                    row[updated_at] = Instant.now()
                     if (name != null) {
                         row[UserItemsTable.name] = name
                     }
                     if (parentId != null) {
-                        row[UserItemsTable.parent_id] = parentId
+                        row[parent_id] = parentId
                     }
                     if (hashSum != null) {
-                        row[UserItemsTable.version] = hashSum
+                        row[version] = hashSum
                     }
                 }
             }
@@ -150,22 +150,124 @@ object UserItemsTable : Table("useritems") {
         }
     }
 
-    fun updateItemWithVersion(
 
+
+    fun updateItemWithVersion(
+        uid: UUID,
+        name: String? = null,
+        parentId: UUID? = null,
+        version: String,
+        baseline: String,
+        modifiedText: String,
+        type: StorageItemsIds
     ): FunctionResult<Unit> {
-        return FunctionResult.Success(Unit)
+        println("Get into updateItemWithVersion")
+        val dmp = DiffMatchPatch()
+        println("Create dmp")
+
+        val lockAcquired = try {
+            println("Get into lock try")
+            transaction {
+                println("Get into lock transaction")
+                exec("select pg_advisory_lock(hashtext(\'$uid\'))")
+            }
+            println("Lock is good")
+            true
+        } catch (e: Exception) {
+            println("Get an exception: $e")
+            false
+        }
+
+        println("Lock is: $lockAcquired")
+
+        if (!lockAcquired) {
+            println("Can't lock resource in updateItemWithVersion")
+            return FunctionResult.Error("Can't lock resource")
+        }
+
+        val serverVersion = transaction {
+            select(UserItemsTable.version)
+                .where { UserItemsTable.uid eq uid }
+                .singleOrNull()?.get(UserItemsTable.version)
+        }
+
+        println("Server version is: $serverVersion")
+
+        if (serverVersion == version || serverVersion == null) {
+            //Just replacing server text with new one from client. Cuz if we don't have difference between baseline and server version so we either don't need to calculate diffs
+            replaceFileMinio(
+                uid = uid,
+                type = type,
+                content = modifiedText,
+            )
+
+            val hashSum = computeHashVersion(modifiedText)
+
+            transaction {
+                UserItemsTable.update({ UserItemsTable.uid eq uid }) { row ->
+                    row[updated_at] = Instant.now()
+                    row[UserItemsTable.version] = hashSum
+                    if (name != null) row[UserItemsTable.name] = name
+                    if (parentId != null) row[parent_id] = parentId
+                }
+            }
+
+            transaction {
+                exec("select pg_advisory_unlock(hashtext($uid))")
+            }
+            println("Item successfully updated cuz don't have any changes on server")
+            return FunctionResult.Success(Unit)
+        } else {
+            //считаем patch для версии пользователя и для серверной версии. Дальше смотрим а наличие конфликтов и получаем еще один if
+            println("Start calculating patches")
+            when (val serverText = readFromFile(uid.toString())) {
+                is FunctionResult.Error -> {
+                    println("Can't read from file")
+                    return FunctionResult.Error("Can't read from file")
+                }
+                is FunctionResult.Success -> {
+                    // 1️⃣ Логируем входные данные
+                    println("Baseline: $baseline")
+                    println("Server Text: ${serverText.data}")
+                    println("Modified Text: $modifiedText")
+
+                    val serverDiff = dmp.diffMain(baseline, serverText.data)
+                    val userDiff = dmp.diffMain(baseline, modifiedText)
+
+                    val userPatches = dmp.patchMake(baseline, userDiff)
+                    val serverPatches = dmp.patchMake(baseline, serverDiff)
+
+                    val (patchedBaseline, serverResult) = dmp.patchApply(serverPatches, baseline)
+
+                    println("Server patches result: ${(serverResult as BooleanArray).joinToString()}}")
+                    println("Sever new text: $patchedBaseline")
+
+                    val (finalText, userResult) = dmp.patchApply(userPatches, patchedBaseline as String)
+
+                    // work but has some issues with complicated merges and give false as result on some changes. Should add handler to false value in result array
+                    println("Final patches result: ${(userResult as BooleanArray).joinToString()}")
+                    println("Final new text: $finalText")
+
+                    transaction {
+                        exec("select pg_advisory_unlock(hashtext(\'$uid\'))")
+                    }
+                    println("Poka hz che-to proizoshlo")
+                    return FunctionResult.Success(Unit)
+                }
+            }
+        }
     }
 
     private fun ResultRow.toStorageItemResponse(): StorageItemResponse {
         println("Row is: $this")
         return StorageItemResponse(
-            uid = this[UserItemsTable.uid],
-            parent_id = this[UserItemsTable.parent_id],
-            name = this[UserItemsTable.name],
+            uid = this[uid],
+            parent_id = this[parent_id],
+            name = this[name],
             type = this[StorageItemsTypesTable.typeName],
-            created_at = this[UserItemsTable.created_at].epochSecond,
-            updated_at = this[UserItemsTable.updated_at].epochSecond,
-            deleted_at = this[UserItemsTable.deleted_at]?.epochSecond
+            created_at = this[created_at].epochSecond,
+            updated_at = this[updated_at].epochSecond,
+            deleted_at = this[deleted_at]?.epochSecond
         )
     }
 
@@ -174,7 +276,7 @@ object UserItemsTable : Table("useritems") {
             val rawRows = transaction {
                 (UserItemsTable innerJoin StorageItemsTypesTable)
                     .selectAll()
-                    .where { (UserItemsTable.owner_id eq userId) and (UserItemsTable.deleted_at.isNull()) }
+                    .where { (owner_id eq userId) and (deleted_at.isNull()) }
                     .toList()
             }
 
@@ -183,7 +285,7 @@ object UserItemsTable : Table("useritems") {
             val items = transaction {
                 (UserItemsTable innerJoin StorageItemsTypesTable)
                     .selectAll()
-                    .where { (UserItemsTable.owner_id eq userId) and (UserItemsTable.deleted_at.isNull()) }
+                    .where { (owner_id eq userId) and (deleted_at.isNull()) }
                     .map { row -> row.toStorageItemResponse() }
             }
             println(items.toString())
@@ -200,7 +302,7 @@ object UserItemsTable : Table("useritems") {
             val items = transaction {
                 (UserItemsTable innerJoin StorageItemsTypesTable)
                     .selectAll()
-                    .where { (UserItemsTable.owner_id eq userId) and (UserItemsTable.deleted_at.isNotNull()) }
+                    .where { (owner_id eq userId) and (deleted_at.isNotNull()) }
                     .map { row -> row.toStorageItemResponse() }
             }
             println(items.toString())

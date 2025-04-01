@@ -1,10 +1,6 @@
 package com.example.routes
 
-import com.example.CreateObject
-import com.example.FunctionResult
-import com.example.LoginUser
-import com.example.RegisterUser
-import com.example.UpdateObject
+import com.example.*
 import com.example.daos.AuthTypes
 import com.example.daos.StorageItemsIds
 import com.example.daos.StorageItemsNames
@@ -199,6 +195,49 @@ fun Application.configureRouting() {
                     val result = updateHandler(
                         instance = updateInstance,
                         uid = uid,
+                        type = type
+                    )
+
+                    when (result) {
+                        is FunctionResult.Success -> call.respond(HttpStatusCode.OK, mapOf("uid" to uid.toString()))
+                        is FunctionResult.Error -> call.respond(HttpStatusCode.BadRequest, mapOf("error" to result.message))
+                    }
+
+                    return@put
+                } catch (ex: Exception) {
+                    println("Get an exception: ${ex.message}")
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to ex.message))
+                }
+            }
+
+            put("/updateVersioned/{uid}") {
+                println("Get into update with version")
+
+                val uidParameter = call.parameters["uid"]
+                val updateInstance = call.receive<UpdateObjectWithVersion>()
+                val type = StorageItemsIds.entries.firstOrNull { it.name.equals(updateInstance.type, ignoreCase = true) }
+
+                if (type == null) {
+                    call.respond(HttpStatusCode.BadRequest, "Bad type")
+                    return@put
+                }
+
+                if(uidParameter == null) {
+                    call.respond(HttpStatusCode.BadRequest, "Missing uid parameter")
+                    return@put
+                }
+
+                try {
+                    val uid = UUID.fromString(uidParameter)
+
+                    //replace with a handler or mb replace request at all
+                    val result = UserItemsTable.updateItemWithVersion(
+                        uid = uid,
+                        name = updateInstance.name,
+                        parentId = updateInstance.parentId,
+                        version = updateInstance.version,
+                        baseline = updateInstance.baseline,
+                        modifiedText = updateInstance.modifiedText,
                         type = type
                     )
 
