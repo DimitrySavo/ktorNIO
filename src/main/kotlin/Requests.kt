@@ -26,9 +26,22 @@ data class RegisterUser(
 )
 
 @Serializable
+data class RegisterUserWithOAuth(
+    val username: String,
+    val type: String,
+    val accountId: String
+)
+
+@Serializable
 data class LoginUser(
     val userEmail: String,
     val password: String
+)
+
+@Serializable
+data class LoginUserOAuth(
+    val accountId: String,
+    val type: String
 )
 
 @Serializable

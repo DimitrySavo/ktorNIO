@@ -1,31 +1,25 @@
 package com.example.routes
 
 import com.example.*
-import com.example.daos.AuthTypes
-import com.example.daos.StorageItemsIds
-import com.example.daos.StorageItemsNames
-import com.example.daos.UserItemsTable
-import com.example.daos.Users
+import com.example.daos.*
 import com.example.handlers.getUserItemContent
 import com.example.handlers.handleItemDelete
 import com.example.handlers.updateHandler
 import com.example.handlers.userItemCreationHandler
 import com.example.security.JWTConfig
-import io.ktor.http.HttpStatusCode
+import com.example.utils.FunctionResult
+import io.ktor.http.*
 import io.ktor.server.application.*
-import io.ktor.server.auth.authenticate
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.principal
-import io.ktor.server.request.receive
-import io.ktor.server.response.respond
+import io.ktor.server.auth.*
+import io.ktor.server.auth.jwt.*
+import io.ktor.server.request.*
+import io.ktor.server.response.*
 import io.ktor.server.routing.*
-import java.util.UUID
-import kotlin.text.Regex
+import java.util.*
 
 fun Application.configureRouting() {
     routing {
         post("/register/local") {
-            println("Get into rofls lol")
             val userRequest = call.receive<RegisterUser>()
 
             if(userRequest.username == "") {
@@ -49,8 +43,7 @@ fun Application.configureRouting() {
             val userId = Users.createUser(
                 username = userRequest.username,
                 email = userRequest.userEmail,
-                password = userRequest.password!!,
-                authType = AuthTypes.Local
+                password = userRequest.password!!
             )
 
             if(userId != null) {
@@ -63,12 +56,29 @@ fun Application.configureRouting() {
             }
         }
 
-        post("/register/google") {
-            TODO()
-        }
+        post("/register/other") {
+            val userRequest = call.receive<RegisterUserWithOAuth>()
+            val authType = AuthTypes.entries.find { userRequest.type == it.name }
 
-        post("/register/vk") {
-            TODO()
+            if (authType == null) {
+                call.respond(HttpStatusCode.BadRequest, "Wrong authorization type name")
+                return@post
+            }
+
+            val userId = Users.createUser(
+                username = userRequest.username,
+                authType = authType,
+                accountId = userRequest.accountId
+            )
+
+            if(userId != null) {
+                val token = JWTConfig.getToken(userId)
+                val refreshToken = JWTConfig.getRefreshToken(userId)
+                call.respond(HttpStatusCode.OK, mapOf("token" to token, "refresh_token" to refreshToken))
+            } else {
+                call.respond(HttpStatusCode.Conflict)
+                return@post
+            }
         }
 
         post("/login/local") {
@@ -85,9 +95,28 @@ fun Application.configureRouting() {
             val authResult = Users.verifyCredentials(loginRequest.userEmail, loginRequest.password)
             val userId = Users.getUserIdByEmail(loginRequest.userEmail)
 
-            if(authResult == true && userId != null) {
+            if(authResult && userId != null) {
                 val token = JWTConfig.getToken(userId)
                 val refreshToken = JWTConfig.getRefreshToken(userId)
+                call.respond(HttpStatusCode.OK, mapOf("token" to token, "refresh_token" to refreshToken))
+            } else {
+                call.respond(HttpStatusCode.Unauthorized, "Bad credentials")
+            }
+        }
+
+        post("login/other") {
+            val loginRequest = call.receive<LoginUserOAuth>()
+            val authType = AuthTypes.entries.find { loginRequest.type == it.name }
+
+            if (authType == null) {
+                call.respond(HttpStatusCode.BadRequest, "Wrong authorization type name")
+                return@post
+            }
+
+            val authResult = DifferentAuthorizations.isThereAreUser(authType.type, loginRequest.accountId)
+            if (authResult != null) {
+                val token = JWTConfig.getToken(authResult)
+                val refreshToken = JWTConfig.getRefreshToken(authResult)
                 call.respond(HttpStatusCode.OK, mapOf("token" to token, "refresh_token" to refreshToken))
             } else {
                 call.respond(HttpStatusCode.Unauthorized, "Bad credentials")
@@ -253,6 +282,7 @@ fun Application.configureRouting() {
                 }
             }
 
+            //Todo remove userId
             get("/items/{userId}"){
                 val userIdParam = call.parameters["userId"]
 
@@ -284,6 +314,7 @@ fun Application.configureRouting() {
                 }
             }
 
+            //Todo remove userId
             get("/items/{userId}/{itemUid}") {
                 val itemUidParam = call.parameters["itemUid"]
 
@@ -309,6 +340,7 @@ fun Application.configureRouting() {
                 }
             }
 
+            //Todo remove userId
             get("/items/deleted/{userId}") {
                 val userIdParam = call.parameters["userId"]
 

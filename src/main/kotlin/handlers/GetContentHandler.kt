@@ -1,6 +1,6 @@
 package com.example.handlers
 
-import com.example.FunctionResult
+import com.example.utils.FunctionResult
 import com.example.daos.UserItemsTable
 import com.example.data.readFromFile
 import java.util.UUID

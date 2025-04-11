@@ -1,10 +1,11 @@
 package com.example.daos
 
-import com.example.FunctionResult
+import com.example.utils.FunctionResult
 import com.example.StorageItemResponse
 import com.example.data.createFileInMinio
 import com.example.data.readFromFile
 import com.example.data.replaceFileMinio
+import com.github.difflib.DiffUtils
 import org.bitbucket.cowwoc.diffmatchpatch.DiffMatchPatch
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.javatime.timestamp
@@ -12,7 +13,7 @@ import org.jetbrains.exposed.sql.transactions.transaction
 import java.security.MessageDigest
 import java.sql.SQLException
 import java.time.Instant
-import java.util.UUID
+import java.util.*
 
 object UserItemsTable : Table("useritems") {
     val uid = uuid("uid")
@@ -112,7 +113,7 @@ object UserItemsTable : Table("useritems") {
         name: String? = null,
         parentId: UUID? = null,
         type: StorageItemsIds
-    ) :FunctionResult<Unit> {
+    ) : FunctionResult<Unit> {
         return try {
             // Add check for existing file, for is file delete and other stuff
             if (type != StorageItemsIds.folder) {
@@ -226,12 +227,16 @@ object UserItemsTable : Table("useritems") {
                     return FunctionResult.Error("Can't read from file")
                 }
                 is FunctionResult.Success -> {
-                    // 1️⃣ Логируем входные данные
                     println("Baseline: $baseline")
                     println("Server Text: ${serverText.data}")
                     println("Modified Text: $modifiedText")
 
-                    val serverDiff = dmp.diffMain(baseline, serverText.data)
+
+
+                    println("Finish merge process")
+                    return FunctionResult.Success(Unit)
+
+                   /* val serverDiff = dmp.diffMain(baseline, serverText.data)
                     val userDiff = dmp.diffMain(baseline, modifiedText)
 
                     val userPatches = dmp.patchMake(baseline, userDiff)
@@ -252,7 +257,7 @@ object UserItemsTable : Table("useritems") {
                         exec("select pg_advisory_unlock(hashtext(\'$uid\'))")
                     }
                     println("Poka hz che-to proizoshlo")
-                    return FunctionResult.Success(Unit)
+                    return FunctionResult.Success(Unit)*/
                 }
             }
         }

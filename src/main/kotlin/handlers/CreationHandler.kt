@@ -1,7 +1,7 @@
 package com.example.handlers
 
 import com.example.CreateObject
-import com.example.FunctionResult
+import com.example.utils.FunctionResult
 import com.example.daos.StorageItemsIds
 import com.example.daos.UserItemsTable
 

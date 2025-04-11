@@ -43,6 +43,9 @@ dependencies {
     //https://github.com/google/diff-match-patch
     implementation("org.bitbucket.cowwoc:diff-match-patch:1.2")
 
+    // https://github.com/java-diff-utils/java-diff-utils/releases/tag/java-diff-utils-parent-4.15
+    implementation ("io.github.java-diff-utils:java-diff-utils:4.15")
+
     implementation("io.ktor:ktor-server-core")
     implementation("io.ktor:ktor-server-auth")
     implementation("io.ktor:ktor-server-auth-jwt")

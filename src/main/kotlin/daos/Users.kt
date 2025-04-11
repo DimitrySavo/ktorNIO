@@ -10,13 +10,12 @@ object Users: Table("users") {
     val userId = integer("userid").autoIncrement()
     val username = varchar("username", 100)
     val userEmail = varchar("useremail", 255).nullable()
-    val password = varchar("password", 255)
-    val authType = integer("authtype").references(AuthTypesTable.authTypeId)
+    val password = varchar("password", 255).nullable()
     val isApproved = bool("isapproved").default(false)
 
     override val primaryKey = PrimaryKey(userId)
 
-    fun createUser(username: String, email: String?, password: String, authType: AuthTypes) : Int? {
+    fun createUser(username: String, email: String?, password: String) : Int? {
         val hashedPassword = BCrypt.hashpw(password, BCrypt.gensalt(12))
         return transaction {
             if(email != null) {
@@ -31,9 +30,28 @@ object Users: Table("users") {
                 it[Users.username] = username
                 it[Users.userEmail] = email
                 it[Users.password] = hashedPassword
-                it[Users.authType] = authType.type
                 it[Users.isApproved] = false
             } get Users.userId
+        }
+    }
+
+    fun createUser(username: String, authType: AuthTypes, accountId: String) : Int? {
+        return transaction {
+            val userId = Users.insert {
+                it[Users.username] = username
+            } get Users.userId
+
+            val account = DifferentAuthorizations.addUser(
+                userId = userId,
+                typeId = authType.type,
+                account = accountId
+            )
+
+            if (account != null) {
+                userId
+            } else {
+                null
+            }
         }
     }
 

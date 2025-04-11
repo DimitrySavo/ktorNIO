@@ -1,6 +1,6 @@
 package com.example.data
 
-import com.example.FunctionResult
+import com.example.utils.FunctionResult
 import com.example.daos.StorageItemsIds
 import io.ktor.server.application.Application
 import io.minio.BucketExistsArgs
