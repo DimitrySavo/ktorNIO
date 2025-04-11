@@ -324,6 +324,21 @@ object UserItemsTable : Table("useritems") {
         val digest = md.digest(content.toByteArray())
         return digest.joinToString("") { "%02x".format(it) }
     }
+
+    fun isItemOwnedByUser(userId: Int, itemUUID: UUID) : FunctionResult<Boolean> {
+        return try {
+            FunctionResult.Success(
+                UserItemsTable.selectAll()
+                    .where {
+                        (UserItemsTable.uid eq itemUUID) and
+                                (UserItemsTable.owner_id eq userId)
+                    }.limit(1).any()
+            )
+        } catch (ex: Exception) {
+            println("Get an exception: $ex")
+            return FunctionResult.Error("Get an exception: $ex")
+        }
+    }
 }
 
 

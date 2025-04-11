@@ -282,19 +282,12 @@ fun Application.configureRouting() {
                 }
             }
 
-            //Todo remove userId
-            get("/items/{userId}"){
-                val userIdParam = call.parameters["userId"]
+            get("/items"){
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal?.payload?.getClaim("userId")?.asInt()
 
-                if (userIdParam == null) {
-                    call.respond(HttpStatusCode.BadRequest, "Missing userId parameter")
-                    return@get
-                }
-
-                val userId = try {
-                    userIdParam.toInt()
-                } catch (ex: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, "Invalid userId format")
+                if (userId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, "Can't get userId form token")
                     return@get
                 }
 
@@ -314,9 +307,15 @@ fun Application.configureRouting() {
                 }
             }
 
-            //Todo remove userId
-            get("/items/{userId}/{itemUid}") {
+            get("/items/{itemUid}") {
                 val itemUidParam = call.parameters["itemUid"]
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal?.payload?.getClaim("userId")?.asInt()
+
+                if (userId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, "Can't get userId form token")
+                    return@get
+                }
 
                 val itemUid = try {
                     UUID.fromString(itemUidParam)
@@ -326,7 +325,7 @@ fun Application.configureRouting() {
                 }
 
                 try {
-                    val result = getUserItemContent(itemUid)
+                    val result = getUserItemContent(itemUid, userId)
 
                     when(result) {
                         is FunctionResult.Error -> call.respond(HttpStatusCode.NotFound, mapOf("error" to result.message))
@@ -340,19 +339,12 @@ fun Application.configureRouting() {
                 }
             }
 
-            //Todo remove userId
-            get("/items/deleted/{userId}") {
-                val userIdParam = call.parameters["userId"]
+            get("/items/deleted") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = principal?.payload?.getClaim("userId")?.asInt()
 
-                if (userIdParam == null) {
-                    call.respond(HttpStatusCode.BadRequest, "Missing userId parameter")
-                    return@get
-                }
-
-                val userId = try {
-                    userIdParam.toInt()
-                } catch (ex: Exception) {
-                    call.respond(HttpStatusCode.BadRequest, "Invalid userId format")
+                if (userId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, "Can't get userId form token")
                     return@get
                 }
 
