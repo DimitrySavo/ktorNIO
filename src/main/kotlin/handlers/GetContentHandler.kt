@@ -5,7 +5,7 @@ import com.example.daos.UserItemsTable
 import com.example.data.readFromFile
 import java.util.UUID
 
-fun getUserItemContent(uid: UUID, userId: Int): FunctionResult<Map<String, String>> {
+fun getUserItemContent(uid: UUID, userId: UUID): FunctionResult<Map<String, String>> {
     val resultMap = mutableMapOf<String, String>()
 
     when (val isFileOwned = UserItemsTable.isItemOwnedByUser(userId, uid)) {

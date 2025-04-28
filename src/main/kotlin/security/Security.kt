@@ -3,15 +3,14 @@ package com.example.security
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.example.daos.Users
-import io.ktor.http.HttpStatusCode
+import io.ktor.http.*
 import io.ktor.server.application.*
-import io.ktor.server.auth.Authentication
-import io.ktor.server.auth.jwt.JWTPrincipal
-import io.ktor.server.auth.jwt.jwt
-import io.ktor.server.response.respond
+import io.ktor.server.auth.*
+import io.ktor.server.auth.jwt.*
+import io.ktor.server.response.*
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
-import java.util.Date
+import java.util.*
 
 
 fun Application.configureSecurity() {
@@ -28,13 +27,18 @@ fun Application.configureSecurity() {
             )
 
             validate { credential ->
-                val userId = credential.payload.getClaim("userId").asInt()
-                val user = transaction{
-                    Users.selectAll().where { Users.userId eq userId }.singleOrNull()
-                }
-                if(user != null) {
-                    JWTPrincipal(credential.payload)
-                } else {
+                try {
+                    val userId = UUID.fromString(credential.payload.getClaim("userId").asString())
+                    val user = transaction{
+                        Users.selectAll().where { Users.userId eq userId }.singleOrNull()
+                    }
+                    if(user != null) {
+                        JWTPrincipal(credential.payload)
+                    } else {
+                        null
+                    }
+                } catch (ex: Exception) {
+                    println("Get an exception: $ex")
                     null
                 }
             }
@@ -55,13 +59,18 @@ fun Application.configureSecurity() {
             )
 
             validate { credential ->
-                val userId = credential.payload.getClaim("userId").asInt()
-                val user = transaction{
-                    Users.selectAll().where { Users.userId eq userId }.singleOrNull()
-                }
-                if(user != null) {
-                    JWTPrincipal(credential.payload)
-                } else {
+                try {
+                    val userId =  UUID.fromString(credential.payload.getClaim("userId").asString())
+                    val user = transaction{
+                        Users.selectAll().where { Users.userId eq userId }.singleOrNull()
+                    }
+                    if(user != null) {
+                        JWTPrincipal(credential.payload)
+                    } else {
+                        null
+                    }
+                } catch (ex: Exception) {
+                    println("Get an exception")
                     null
                 }
             }
@@ -81,20 +90,20 @@ object JWTConfig {
     val issuer = "nio_user"
     val realm = "nio_realm"
 
-    fun getToken(userId: Int) : String {
+    fun getToken(userId: UUID) : String {
         return JWT.create()
             .withAudience(audience)
             .withIssuer(issuer)
-            .withClaim("userId", userId)
+            .withClaim("userId", userId.toString())
             .withExpiresAt(Date(System.currentTimeMillis() + 3600 * 1000)) // 1 hour
             .sign(Algorithm.HMAC256(secret))
     }
 
-    fun getRefreshToken(userId: Int) : String {
+    fun getRefreshToken(userId: UUID) : String {
         return JWT.create()
             .withAudience(audience)
             .withIssuer(issuer)
-            .withClaim("userId", userId)
+            .withClaim("userId", userId.toString())
             .withExpiresAt(Date(System.currentTimeMillis() + 24 * 24 * 3600 * 1000))
             .sign(Algorithm.HMAC256(refreshSecret))
     }

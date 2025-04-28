@@ -4,8 +4,9 @@ import com.example.CreateObject
 import com.example.utils.FunctionResult
 import com.example.daos.StorageItemsIds
 import com.example.daos.UserItemsTable
+import java.util.UUID
 
-fun userItemCreationHandler(instance: CreateObject, ownerId: Int) : FunctionResult<String> {
+fun userItemCreationHandler(instance: CreateObject, ownerId: UUID) : FunctionResult<String> {
     return when (instance.type) {
         StorageItemsIds.md.name -> {
             UserItemsTable.createItem(

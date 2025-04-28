@@ -21,7 +21,7 @@ object UserItemsTable : Table("useritems") {
     val name = varchar("name", 255)
     val type = integer("type").references(StorageItemsTypesTable.typeId)
     val version = text("version")
-    val owner_id = integer("owner_id").references(Users.userId)
+    val owner_id = uuid("owner_id").references(Users.userId)
     val created_at = timestamp("created_at")
     val updated_at = timestamp("updated_at")
     val deleted_at = timestamp("deleted_at").nullable()
@@ -29,7 +29,7 @@ object UserItemsTable : Table("useritems") {
     fun createItem(
         uid: UUID,
         parent_id: UUID? = null,
-        user_id: Int,
+        user_id: UUID,
         name: String,
         type: StorageItemsIds
     ) : FunctionResult<String> {
@@ -270,13 +270,14 @@ object UserItemsTable : Table("useritems") {
             parent_id = this[parent_id],
             name = this[name],
             type = this[StorageItemsTypesTable.typeName],
+            version = this[version],
             created_at = this[created_at].epochSecond,
             updated_at = this[updated_at].epochSecond,
             deleted_at = this[deleted_at]?.epochSecond
         )
     }
 
-    fun getUserItems(userId: Int): FunctionResult<List<StorageItemResponse>> {
+    fun getUserItems(userId: UUID): FunctionResult<List<StorageItemResponse>> {
         return try {
             val rawRows = transaction {
                 (UserItemsTable innerJoin StorageItemsTypesTable)
@@ -302,7 +303,7 @@ object UserItemsTable : Table("useritems") {
         }
     }
 
-    fun getDeletedUserItems(userId: Int): FunctionResult<List<StorageItemResponse>> {
+    fun getDeletedUserItems(userId: UUID): FunctionResult<List<StorageItemResponse>> {
         return try {
             val items = transaction {
                 (UserItemsTable innerJoin StorageItemsTypesTable)
@@ -325,7 +326,7 @@ object UserItemsTable : Table("useritems") {
         return digest.joinToString("") { "%02x".format(it) }
     }
 
-    fun isItemOwnedByUser(userId: Int, itemUUID: UUID) : FunctionResult<Boolean> {
+    fun isItemOwnedByUser(userId: UUID, itemUUID: UUID) : FunctionResult<Boolean> {
         return try {
             FunctionResult.Success(
                 UserItemsTable.selectAll()

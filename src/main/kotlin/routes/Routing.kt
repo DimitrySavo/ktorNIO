@@ -2,12 +2,11 @@ package com.example.routes
 
 import com.example.*
 import com.example.daos.*
-import com.example.handlers.getUserItemContent
-import com.example.handlers.handleItemDelete
-import com.example.handlers.updateHandler
-import com.example.handlers.userItemCreationHandler
+import com.example.handlers.*
 import com.example.security.JWTConfig
 import com.example.utils.FunctionResult
+import com.example.utils.Helpers
+import com.example.utils.OperationResult
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -15,6 +14,8 @@ import io.ktor.server.auth.jwt.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import org.jetbrains.exposed.sql.Except
+import org.koin.ktor.ext.get
 import java.util.*
 
 fun Application.configureRouting() {
@@ -51,7 +52,7 @@ fun Application.configureRouting() {
                 val refreshToken = JWTConfig.getRefreshToken(userId)
                 call.respond(HttpStatusCode.OK, mapOf("token" to token, "refresh_token" to refreshToken))
             } else {
-                call.respond(HttpStatusCode.Conflict)
+                call.respond(HttpStatusCode.Conflict, mapOf("error" to "Already have user with such email"))
                 return@post
             }
         }
@@ -123,16 +124,112 @@ fun Application.configureRouting() {
             }
         }
 
+        post("get_otp_code") {
+            val request = call.receive<ResetPasswordEmail>()
+            val userEmail = request.email
+
+            if (userEmail.isNullOrBlank()) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing or empty userEmail"))
+                return@post
+            }
+
+            when (val otpSendResult = OTPRequestHandler(userEmail)) {
+                is FunctionResult.Error -> {
+                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to otpSendResult.message))
+                    return@post
+                }
+
+                is FunctionResult.Success -> {
+                    call.respond(HttpStatusCode.OK)
+                    return@post
+                }
+            }
+        }
+
+        get("check_otp_code") {
+            val request = call.receive<ResetPasswordOtp>()
+            val otp = request.otp
+
+            if (request.userEmail.isNullOrBlank()) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Empty user email"))
+                return@get
+            }
+            val userId = Users.getUserIdByEmail(request.userEmail)
+
+            if (otp.isNullOrBlank()) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing or empty OTP"))
+                return@get
+            }
+
+            if (userId != null) {
+                when (val checkResult = PasswordResetCodes.validateAndUseResetCode(userId, otp)) {
+                    is OperationResult.ServerError -> {
+                        call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Server error"))
+                        return@get
+                    }
+
+                    is OperationResult.UserError -> {
+                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Bad otp or otp expired"))
+                        return@get
+                    }
+
+                    is OperationResult.Success -> {
+                        call.respond(HttpStatusCode.OK)
+                        return@get
+                    }
+                }
+            } else {
+                call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Bad credentials"))
+                return@get
+            }
+        }
+
+        patch("reset_password") {
+            val request = call.receive<ResetPasswordNew>()
+            if (request.email.isNullOrBlank()) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Empty user email"))
+                return@patch
+            }
+            val userUid = Users.getUserIdByEmail(request.email)
+
+            if (request.newPassword.isNullOrBlank()) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Empty new password"))
+                return@patch
+            }
+
+            if (userUid == null) {
+                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Can't find user with such email"))
+                return@patch
+            }
+
+            when (val updateResult = Users.updateUserPassword(userUid = userUid, newPassword = request.newPassword)) {
+                is OperationResult.ServerError -> {
+                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Server error"))
+                    return@patch
+                }
+
+                is OperationResult.UserError -> {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to updateResult.message))
+                    return@patch
+                }
+
+                is OperationResult.Success -> {
+                    call.respond(HttpStatusCode.OK)
+                    return@patch
+                }
+            }
+        }
+
         authenticate("refresh-jwt") {
             get("/refresh") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal?.payload?.getClaim("userId")?.asInt()
+                val userId = Helpers.getUserUidFromToken(principal)
 
                 if(userId != null) {
                     val token = JWTConfig.getToken(userId)
                     call.respond(HttpStatusCode.OK, mapOf("token" to token))
                 } else {
-                    call.respond(HttpStatusCode.Unauthorized, "Bad credentials")
+                    call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Bad credentials"))
                 }
             }
         }
@@ -140,7 +237,7 @@ fun Application.configureRouting() {
         authenticate("auth-jwt") {
             get("/jwt/test") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal?.payload?.getClaim("userId")?.asInt()
+                val userId = Helpers.getUserUidFromToken(principal)
 
                 if(userId != null) {
                     call.respond(HttpStatusCode.OK, mapOf("userId" to userId))
@@ -151,7 +248,7 @@ fun Application.configureRouting() {
 
             post("/create") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal?.payload?.getClaim("userId")?.asInt()
+                val userId = Helpers.getUserUidFromToken(principal)
 
                 if(userId != null) {
                     try {
@@ -284,7 +381,7 @@ fun Application.configureRouting() {
 
             get("/items"){
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal?.payload?.getClaim("userId")?.asInt()
+                val userId = Helpers.getUserUidFromToken(principal)
 
                 if (userId == null) {
                     call.respond(HttpStatusCode.Unauthorized, "Can't get userId form token")
@@ -310,7 +407,7 @@ fun Application.configureRouting() {
             get("/items/{itemUid}") {
                 val itemUidParam = call.parameters["itemUid"]
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal?.payload?.getClaim("userId")?.asInt()
+                val userId = Helpers.getUserUidFromToken(principal)
 
                 if (userId == null) {
                     call.respond(HttpStatusCode.Unauthorized, "Can't get userId form token")
@@ -341,7 +438,7 @@ fun Application.configureRouting() {
 
             get("/items/deleted") {
                 val principal = call.principal<JWTPrincipal>()
-                val userId = principal?.payload?.getClaim("userId")?.asInt()
+                val userId = Helpers.getUserUidFromToken(principal)
 
                 if (userId == null) {
                     call.respond(HttpStatusCode.Unauthorized, "Can't get userId form token")

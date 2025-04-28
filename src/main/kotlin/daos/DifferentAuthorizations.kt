@@ -7,14 +7,15 @@ import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.sql.SQLException
+import java.util.UUID
 
 object DifferentAuthorizations : Table("differentauthorizations") {
-    val userId = integer("userid").references(Users.userId)
+    val userId = uuid("userid").references(Users.userId)
     val typeId = integer("typeid").references(AuthTypesTable.authTypeId)
     val accountId = varchar("accountid", 100)
     override val primaryKey = PrimaryKey(userId, typeId)
 
-    fun addUser(userId: Int, typeId: Int, account: String) : String? {
+    fun addUser(userId: UUID, typeId: Int, account: String) : String? {
         return try {
             transaction {
                 DifferentAuthorizations.insert {
@@ -32,7 +33,7 @@ object DifferentAuthorizations : Table("differentauthorizations") {
         }
     }
 
-    fun isThereAreUser(typeId: Int, account: String) : Int? {
+    fun isThereAreUser(typeId: Int, account: String) : UUID? {
         return try {
             transaction {
                 DifferentAuthorizations.selectAll()

@@ -28,6 +28,7 @@ data class RegisterUser(
 @Serializable
 data class RegisterUserWithOAuth(
     val username: String,
+    val email: String? = null,
     val type: String,
     val accountId: String
 )
@@ -42,6 +43,23 @@ data class LoginUser(
 data class LoginUserOAuth(
     val accountId: String,
     val type: String
+)
+
+@Serializable
+data class ResetPasswordEmail(
+    val email: String?
+)
+
+@Serializable
+data class ResetPasswordOtp(
+    val otp: String?,
+    val userEmail: String?
+)
+
+@Serializable
+data class ResetPasswordNew(
+    val email: String?,
+    val newPassword: String?
 )
 
 @Serializable
@@ -92,6 +110,7 @@ data class StorageItemResponse (
     val parent_id: UUID?,
     val name: String,
     val type: String,
+    val version: String?,
     val created_at: Long,
     val updated_at: Long,
     val deleted_at: Long? = null

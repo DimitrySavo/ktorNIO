@@ -46,6 +46,12 @@ dependencies {
     // https://github.com/java-diff-utils/java-diff-utils/releases/tag/java-diff-utils-parent-4.15
     implementation ("io.github.java-diff-utils:java-diff-utils:4.15")
 
+    // https://mvnrepository.com/artifact/org.simplejavamail/simple-java-mail
+    implementation("org.simplejavamail:simple-java-mail:8.12.5")
+
+    // https://mvnrepository.com/artifact/io.github.cdimascio/dotenv-kotlin
+    implementation("io.github.cdimascio:dotenv-kotlin:6.5.1")
+
     implementation("io.ktor:ktor-server-core")
     implementation("io.ktor:ktor-server-auth")
     implementation("io.ktor:ktor-server-auth-jwt")

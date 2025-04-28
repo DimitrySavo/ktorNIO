@@ -1,0 +1,581 @@
+openapi: 3.0.1
+info:
+  title: Example Ktor API
+  version: 1.0.0
+paths:
+  ## — Публичные (без JWT) — ##
+  /register/local:
+    post:
+      summary: Регистрация по e-mail и паролю
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterUser'
+      responses:
+        '200':
+          description: Успешная регистрация, возвращает токены
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  refresh_token:
+                    type: string
+        '400':
+          description: Неверные данные запроса
+        '409':
+          description: Пользователь с таким e-mail уже существует
+
+  /register/other:
+    post:
+      summary: Регистрация через OAuth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterUserWithOAuth'
+      responses:
+        '200':
+          description: Успешная регистрация, возвращает токены
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  refresh_token:
+                    type: string
+        '400':
+          description: Неправильный тип авторизации
+        '409':
+          description: Конфликт при создании (аккаунт уже существует)
+
+  /login/local:
+    post:
+      summary: Локальный вход по e-mail и паролю
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginUser'
+      responses:
+        '200':
+          description: Успешная аутентификация, возвращает токены
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  refresh_token:
+                    type: string
+        '400':
+          description: Неверный формат e-mail или пустой пароль
+        '401':
+          description: Неправильные учётные данные
+
+  /login/other:
+    post:
+      summary: Вход через OAuth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginUserOAuth'
+      responses:
+        '200':
+          description: Успешная аутентификация, возвращает токены
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+                  refresh_token:
+                    type: string
+        '400':
+          description: Неправильный тип авторизации
+        '401':
+          description: Неправильные учётные данные
+
+  /get_otp_code:
+    post:
+      summary: Отправка OTP-кода для сброса пароля
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordEmail'
+      responses:
+        '200':
+          description: Код успешно отправлен
+        '400':
+          description: Пустой или некорректный e-mail
+        '500':
+          description: Ошибка сервера при отправке кода
+
+  /check_otp_code:
+    get:
+      summary: Проверка и использование OTP-кода
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordOtp'
+      responses:
+        '200':
+          description: Код валиден
+        '400':
+          description: Плохой или просроченный код, или пустой e-mail
+        '401':
+          description: Пользователь не найден
+        '500':
+          description: Ошибка сервера при валидации кода
+
+  /reset_password:
+    patch:
+      summary: Установка нового пароля после проверки OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordNew'
+      responses:
+        '200':
+          description: Пароль успешно изменён
+        '400':
+          description: Пустые поля или пользователь не найден
+        '500':
+          description: Ошибка сервера при обновлении пароля
+
+  ## — Защищённые JWT-маршруты — ##
+  /refresh:
+    get:
+      summary: Обновление access-токена по refresh-токену
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Новый access-токен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
+        '401':
+          description: Неправильный или просроченный refresh-токен
+
+  /jwt/test:
+    get:
+      summary: Тестовый маршрут JWT-аутентификации
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Возвращает userId из токена
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  userId:
+                    type: string
+        '401':
+          description: Неправильные учётные данные
+
+  /create:
+    post:
+      summary: Создание нового объекта пользователя
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateObject'
+      responses:
+        '201':
+          description: Объект успешно создан
+        '400':
+          description: Ошибка валидации данных
+        '401':
+          description: Неавторизован
+
+  /delete/{uid}:
+    delete:
+      summary: Удаление объекта по UUID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Успешное удаление, возвращает uid
+        '400':
+          description: Некорректный UUID
+        '401':
+          description: Неавторизован
+        '500':
+          description: Ошибка сервера при удалении
+
+  /test:
+    put:
+      summary: Тестовый PUT-маршрут
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Всегда OK
+        '401':
+          description: Неавторизован
+
+  /update/{uid}:
+    put:
+      summary: Обновление объекта по UUID
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateObject'
+      responses:
+        '200':
+          description: Обновление прошло успешно, возвращает uid
+        '400':
+          description: Ошибка валидации или некорректный тип
+        '401':
+          description: Неавторизован
+
+  /updateVersioned/{uid}:
+    put:
+      summary: Версионированное обновление объекта
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateObjectWithVersion'
+      responses:
+        '200':
+          description: Успешное обновление версии, возвращает uid
+        '400':
+          description: Ошибка валидации данных
+        '401':
+          description: Неавторизован
+
+  /items:
+    get:
+      summary: Список всех объектов пользователя
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Массив объектов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StorageItemResponse'
+        '401':
+          description: Неавторизован
+        '400':
+          description: Ошибка при получении
+
+  /items/{itemUid}:
+    get:
+      summary: Детальная информация об объекте
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: itemUid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Объект найден
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ItemContent'
+        '400':
+          description: Неверный UUID
+        '401':
+          description: Неавторизован
+        '404':
+          description: Объект не найден
+
+  /items/deleted:
+    get:
+      summary: Список удалённых объектов пользователя
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Массив удалённых объектов
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/StorageItemResponse'
+        '401':
+          description: Неавторизован
+        '400':
+          description: Ошибка при получении
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    RegisterUser:
+      type: object
+      properties:
+        username:
+          type: string
+        userEmail:
+          type: string
+          format: email
+          nullable: true
+        password:
+          type: string
+      required:
+        - username
+        - password
+
+    RegisterUserWithOAuth:
+      type: object
+      properties:
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+          nullable: true
+        type:
+          type: string
+        accountId:
+          type: string
+      required:
+        - username
+        - type
+        - accountId
+
+    LoginUser:
+      type: object
+      properties:
+        userEmail:
+          type: string
+          format: email
+        password:
+          type: string
+      required:
+        - userEmail
+        - password
+
+    LoginUserOAuth:
+      type: object
+      properties:
+        accountId:
+          type: string
+        type:
+          type: string
+      required:
+        - accountId
+        - type
+
+    ResetPasswordEmail:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+      required:
+        - email
+
+    ResetPasswordOtp:
+      type: object
+      properties:
+        otp:
+          type: string
+        userEmail:
+          type: string
+          format: email
+      required:
+        - otp
+        - userEmail
+
+    ResetPasswordNew:
+      type: object
+      properties:
+        email:
+          type: string
+          format: email
+        newPassword:
+          type: string
+      required:
+        - email
+        - newPassword
+
+    CreateObject:
+      type: object
+      properties:
+        type:
+          type: string
+        data:
+          $ref: '#/components/schemas/ItemObject'
+      required:
+        - type
+        - data
+
+    ItemObject:
+      type: object
+      properties:
+        uid:
+          type: string
+          format: uuid
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+      required:
+        - uid
+        - name
+
+    UpdateObject:
+      type: object
+      properties:
+        type:
+          type: string
+        data:
+          $ref: '#/components/schemas/UpdateItem'
+      required:
+        - type
+        - data
+
+    UpdateObjectWithVersion:
+      type: object
+      properties:
+        name:
+          type: string
+        parentId:
+          type: string
+          format: uuid
+          nullable: true
+        version:
+          type: string
+        baseline:
+          type: string
+        modifiedText:
+          type: string
+        type:
+          type: string
+      required:
+        - name
+        - version
+        - baseline
+        - modifiedText
+        - type
+
+    UpdateItem:
+      type: object
+      properties:
+        fileContent:
+          type: string
+          nullable: true
+        name:
+          type: string
+          nullable: true
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+
+    StorageItemResponse:
+      type: object
+      properties:
+        uid:
+          type: string
+          format: uuid
+        parent_id:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+        type:
+          type: string
+        version:
+          type: string
+        created_at:
+          type: integer
+        updated_at:
+          type: integer
+        deleted_at:
+          type: integer
+          nullable: true
+      required:
+        - uid
+        - name
+        - type
+        - created_at
+        - updated_at
+
+    ItemContent:
+      type: object
+      properties:
+        version:
+          type: string
+        content:
+          type: string
+      required:
+        - version
+        - content
