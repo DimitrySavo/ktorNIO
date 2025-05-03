@@ -128,15 +128,28 @@ paths:
   /check_otp_code:
     get:
       summary: Проверка и использование OTP-кода
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ResetPasswordOtp'
+      parameters:
+        - in: query
+          name: otp
+          schema:
+            type: string
+          required: true
+        - in: query
+          name: userEmail
+          schema:
+            type: string
+            format: email
+          required: true
       responses:
         '200':
-          description: Код валиден
+          description: Код валиден, возвращает секрет для сброса пароля
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  token:
+                    type: string
         '400':
           description: Плохой или просроченный код, или пустой e-mail
         '401':
@@ -147,12 +160,16 @@ paths:
   /reset_password:
     patch:
       summary: Установка нового пароля после проверки OTP
+      parameters:
+        - $ref: '#/components/parameters/ResetPasswordTokenHeader'
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ResetPasswordNew'
+      security:
+        - resetPasswordToken: []
       responses:
         '200':
           description: Пароль успешно изменён
@@ -165,8 +182,10 @@ paths:
   /refresh:
     get:
       summary: Обновление access-токена по refresh-токену
+      parameters:
+        - $ref: '#/components/parameters/RefreshTokenHeader'
       security:
-        - bearerAuth: []
+        - refreshToken: []
       responses:
         '200':
           description: Новый access-токен
@@ -183,8 +202,10 @@ paths:
   /jwt/test:
     get:
       summary: Тестовый маршрут JWT-аутентификации
+      parameters:
+        - $ref: '#/components/parameters/AccessTokenHeader'
       security:
-        - bearerAuth: []
+        - accessToken: []
       responses:
         '200':
           description: Возвращает userId из токена
@@ -201,8 +222,10 @@ paths:
   /create:
     post:
       summary: Создание нового объекта пользователя
+      parameters:
+        - $ref: '#/components/parameters/AccessTokenHeader'
       security:
-        - bearerAuth: []
+        - accessToken: []
       requestBody:
         required: true
         content:
@@ -220,8 +243,6 @@ paths:
   /delete/{uid}:
     delete:
       summary: Удаление объекта по UUID
-      security:
-        - bearerAuth: []
       parameters:
         - name: uid
           in: path
@@ -229,6 +250,9 @@ paths:
           schema:
             type: string
             format: uuid
+        - $ref: '#/components/parameters/AccessTokenHeader'
+      security:
+        - accessToken: []
       responses:
         '200':
           description: Успешное удаление, возвращает uid
@@ -242,8 +266,10 @@ paths:
   /test:
     put:
       summary: Тестовый PUT-маршрут
+      parameters:
+        - $ref: '#/components/parameters/AccessTokenHeader'
       security:
-        - bearerAuth: []
+        - accessToken: []
       responses:
         '200':
           description: Всегда OK
@@ -253,8 +279,6 @@ paths:
   /update/{uid}:
     put:
       summary: Обновление объекта по UUID
-      security:
-        - bearerAuth: []
       parameters:
         - name: uid
           in: path
@@ -262,6 +286,9 @@ paths:
           schema:
             type: string
             format: uuid
+        - $ref: '#/components/parameters/AccessTokenHeader'
+      security:
+        - accessToken: []
       requestBody:
         required: true
         content:
@@ -270,7 +297,7 @@ paths:
               $ref: '#/components/schemas/UpdateObject'
       responses:
         '200':
-          description: Обновление прошло успешно, возвращает uid
+          description: Успешное обновление, возвращает uid
         '400':
           description: Ошибка валидации или некорректный тип
         '401':
@@ -279,8 +306,6 @@ paths:
   /updateVersioned/{uid}:
     put:
       summary: Версионированное обновление объекта
-      security:
-        - bearerAuth: []
       parameters:
         - name: uid
           in: path
@@ -288,6 +313,9 @@ paths:
           schema:
             type: string
             format: uuid
+        - $ref: '#/components/parameters/AccessTokenHeader'
+      security:
+        - accessToken: []
       requestBody:
         required: true
         content:
@@ -305,8 +333,10 @@ paths:
   /items:
     get:
       summary: Список всех объектов пользователя
+      parameters:
+        - $ref: '#/components/parameters/AccessTokenHeader'
       security:
-        - bearerAuth: []
+        - accessToken: []
       responses:
         '200':
           description: Массив объектов
@@ -316,16 +346,14 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/StorageItemResponse'
-        '401':
-          description: Неавторизован
         '400':
           description: Ошибка при получении
+        '401':
+          description: Неавторизован
 
   /items/{itemUid}:
     get:
       summary: Детальная информация об объекте
-      security:
-        - bearerAuth: []
       parameters:
         - name: itemUid
           in: path
@@ -333,6 +361,9 @@ paths:
           schema:
             type: string
             format: uuid
+        - $ref: '#/components/parameters/AccessTokenHeader'
+      security:
+        - accessToken: []
       responses:
         '200':
           description: Объект найден
@@ -350,8 +381,10 @@ paths:
   /items/deleted:
     get:
       summary: Список удалённых объектов пользователя
+      parameters:
+        - $ref: '#/components/parameters/AccessTokenHeader'
       security:
-        - bearerAuth: []
+        - accessToken: []
       responses:
         '200':
           description: Массив удалённых объектов
@@ -361,17 +394,54 @@ paths:
                 type: array
                 items:
                   $ref: '#/components/schemas/StorageItemResponse'
-        '401':
-          description: Неавторизован
         '400':
           description: Ошибка при получении
+        '401':
+          description: Неавторизован
 
 components:
   securitySchemes:
-    bearerAuth:
+    accessToken:
       type: http
       scheme: bearer
       bearerFormat: JWT
+      description: "Используется для большинства защищённых эндпоинтов (auth-jwt)"
+    refreshToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "Используется на /refresh (refresh-jwt)"
+    resetPasswordToken:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: "Используется на /reset_password после проверки OTP (reset-password-jwt)"
+
+  parameters:
+    AccessTokenHeader:
+      name: Authorization
+      in: header
+      description: "Bearer-токен доступа"
+      required: true
+      schema:
+        type: string
+        example: "Bearer eyJhbGciOiJI…"
+    RefreshTokenHeader:
+      name: Authorization
+      in: header
+      description: "Bearer-токен обновления"
+      required: true
+      schema:
+        type: string
+        example: "Bearer eyJhbGciOiJI…"
+    ResetPasswordTokenHeader:
+      name: Authorization
+      in: header
+      description: "Bearer-токен для сброса пароля"
+      required: true
+      schema:
+        type: string
+        example: "Bearer eyJhbGciOiJI…"
 
   schemas:
     RegisterUser:
@@ -454,9 +524,6 @@ components:
     ResetPasswordNew:
       type: object
       properties:
-        email:
-          type: string
-          format: email
         newPassword:
           type: string
       required:

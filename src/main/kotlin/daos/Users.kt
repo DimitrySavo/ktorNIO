@@ -135,8 +135,8 @@ object Users: Table("users") {
 
 enum class AuthTypes(val type: Int) {
     Local(1),
-    Google(3),
-    Vk(2)
+    Vk(2),
+    Google(3)
 }
 
 data class User(

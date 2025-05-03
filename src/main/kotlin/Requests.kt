@@ -58,7 +58,6 @@ data class ResetPasswordOtp(
 
 @Serializable
 data class ResetPasswordNew(
-    val email: String?,
     val newPassword: String?
 )
 

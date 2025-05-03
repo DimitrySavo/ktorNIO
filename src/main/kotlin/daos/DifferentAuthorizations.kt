@@ -1,13 +1,12 @@
 package com.example.daos
 
-import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.Table
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.sql.SQLException
-import java.util.UUID
+import java.util.*
 
 object DifferentAuthorizations : Table("differentauthorizations") {
     val userId = uuid("userid").references(Users.userId)
@@ -40,10 +39,10 @@ object DifferentAuthorizations : Table("differentauthorizations") {
                     .where {
                         (DifferentAuthorizations.typeId eq typeId) and
                                 (DifferentAuthorizations.accountId eq account)
-                    }
-            }.limit(1)
-                .firstOrNull()
-                ?.get(DifferentAuthorizations.userId)
+                    }.limit(1)
+                    .firstOrNull()
+                    ?.get(DifferentAuthorizations.userId)
+            }
         } catch (sqlEx: SQLException) {
             println("Get an sql exception: $sqlEx")
             null

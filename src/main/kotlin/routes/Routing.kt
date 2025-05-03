@@ -174,7 +174,7 @@ fun Application.configureRouting() {
                     }
 
                     is OperationResult.Success -> {
-                        call.respond(HttpStatusCode.OK)
+                        call.respond(HttpStatusCode.OK, mapOf("token" to JWTConfig.getResetPasswordSecret(userId)))
                         return@get
                     }
                 }
@@ -184,38 +184,37 @@ fun Application.configureRouting() {
             }
         }
 
-        patch("reset_password") {
-            val request = call.receive<ResetPasswordNew>()
-            if (request.email.isNullOrBlank()) {
-                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Empty user email"))
-                return@patch
-            }
-            val userUid = Users.getUserIdByEmail(request.email)
+        authenticate("reset-password-jwt") {
+            patch("reset_password") {
+                val request = call.receive<ResetPasswordNew>()
+                val principal = call.receive<JWTPrincipal>()
+                val userUid = Helpers.getUserUidFromToken(principal)
 
-            if (request.newPassword.isNullOrBlank()) {
-                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Empty new password"))
-                return@patch
-            }
-
-            if (userUid == null) {
-                call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Can't find user with such email"))
-                return@patch
-            }
-
-            when (val updateResult = Users.updateUserPassword(userUid = userUid, newPassword = request.newPassword)) {
-                is OperationResult.ServerError -> {
-                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Server error"))
+                if (request.newPassword.isNullOrBlank()) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Empty new password"))
                     return@patch
                 }
 
-                is OperationResult.UserError -> {
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to updateResult.message))
+                if (userUid == null) {
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Can't find user with such email"))
                     return@patch
                 }
 
-                is OperationResult.Success -> {
-                    call.respond(HttpStatusCode.OK)
-                    return@patch
+                when (val updateResult = Users.updateUserPassword(userUid = userUid, newPassword = request.newPassword)) {
+                    is OperationResult.ServerError -> {
+                        call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Server error"))
+                        return@patch
+                    }
+
+                    is OperationResult.UserError -> {
+                        call.respond(HttpStatusCode.BadRequest, mapOf("error" to updateResult.message))
+                        return@patch
+                    }
+
+                    is OperationResult.Success -> {
+                        call.respond(HttpStatusCode.OK)
+                        return@patch
+                    }
                 }
             }
         }
