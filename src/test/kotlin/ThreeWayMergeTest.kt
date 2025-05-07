@@ -4,172 +4,282 @@ import com.example.utils.theewaysmerge.ThreeWayMerge
 import org.junit.Assert.assertEquals
 import kotlin.test.Test
 
-class ThreeWayMergeTest {
+class ThreeWayMerge1Test {
     private val merger = ThreeWayMerge()
 
-    /**
-     * Тест, когда никаких изменений нет — все три версии совпадают.
-     */
     @Test
-    fun testNoChange() {
-        val base = "line1\nline2\nline3"
+    fun testNoChanges() {
+        val base = """
+            line1
+            line2
+            line3
+        """.trimIndent()
         val user = base
         val server = base
 
-        val expected = "line1\nline2\nline3"
         val result = merger.merge(base, user, server)
-        println("testNoChange: merged result:")
-        println(result)
+        println("Test No Changes:\n$result\n")
+        assertEquals(base, result)
+    }
+
+    @Test
+    fun testOnlyServerChanged() {
+        val base = """
+            line1
+            line2
+            line3
+        """.trimIndent()
+        val user = base
+        val server = """
+            line1
+            modified line2
+            line3
+        """.trimIndent()
+
+        val expected = """
+            line1
+            modified line2
+            line3
+        """.trimIndent()
+
+        val result = merger.merge(base, user, server)
+        println("Test Only Server Changed:\n$result\n")
         assertEquals(expected, result)
     }
 
-    /**
-     * Тест: пользователь вставил строку, а сервер оставил версию без изменений.
-     */
     @Test
-    fun testUserInsertion() {
-        val base = "line1\nline2\nline3"
-        val user = "line1\nline2\ninserted by user\nline3"
+    fun testOnlyUserChanged() {
+        val base = """
+            line1
+            line2
+            line3
+        """.trimIndent()
+        val user = """
+            line1
+            user modified line2
+            line3
+        """.trimIndent()
         val server = base
 
-        val expected =
-            "line1\nline2\n<<<<<<< USER\ninserted by user\n=======\nline3\n>>>>>>> SERVER\n<<<<<<< USER\nline3\n=======\n\n>>>>>>> SERVER"
+        val expected = """
+            line1
+            user modified line2
+            line3
+        """.trimIndent()
+
         val result = merger.merge(base, user, server)
-        println("testUserInsertion: merged result:")
-        println(result)
+        println("Test Only User Changed:\n$result\n")
         assertEquals(expected, result)
     }
 
-    /**
-     * Тест: сервер вставил строку, а пользователь оставил исходный вариант.
-     */
     @Test
-    fun testServerInsertion() {
-        val base = "line1\nline2\nline3"
-        val user = base
-        val server = "line1\ninserted by server\nline2\nline3"
+    fun testConflictWhenBothChanged() {
+        val base = """
+            line1
+            line2
+            line3
+        """.trimIndent()
+        val user = """
+            line1
+            user modified line2
+            line3
+        """.trimIndent()
+        val server = """
+            line1
+            server modified line2
+            line3
+        """.trimIndent()
 
-        val expected =
-            "line1\n<<<<<<< USER\nline2\n=======\ninserted by server\n>>>>>>> SERVER\n<<<<<<< USER\nline3\n=======\nline2\n>>>>>>> SERVER\n<<<<<<< USER\n\n=======\nline3\n>>>>>>> SERVER"
+        val expected = """
+            line1
+            <<<<<<< USER
+            user modified line2
+            =======
+            server modified line2
+            >>>>>>> SERVER
+            line3
+        """.trimIndent()
+
         val result = merger.merge(base, user, server)
-        println("testServerInsertion: merged result:")
-        println(result)
+        println("Test Conflict When Both Changed:\n$result\n")
         assertEquals(expected, result)
     }
 
-    /**
-     * Тест: пользователь удалил строку (удаление line2), сервер оставил нетронутый текст.
-     */
     @Test
-    fun testUserDeletion() {
-        val base = "line1\nline2\nline3"
-        val user = "line1\nline3"  // удалена строка "line2"
+    fun testInsertionNonConflict() {
+        // Пользовательская версия вставляет новую строку, сервер остаётся без изменений.
+        val base = """
+            line1
+            line2
+            line3
+        """.trimIndent()
+        val user = """
+            line1
+            new line between
+            line2
+            line3
+        """.trimIndent()
         val server = base
 
-        val expected =
-            "line1\n<<<<<<< USER\nline3\n=======\nline2\n>>>>>>> SERVER\n<<<<<<< USER\n\n=======\nline3\n>>>>>>> SERVER"
+        val expected = """
+            line1
+            new line between
+            line2
+            line3
+        """.trimIndent()
+
         val result = merger.merge(base, user, server)
-        println("testUserDeletion: merged result:")
-        println(result)
+        println("Test Insertion Non-Conflict:\n$result\n")
         assertEquals(expected, result)
     }
 
-    /**
-     * Тест: сервер удалил строку (удаление line2), пользователь оставил исходное содержимое.
-     */
     @Test
-    fun testServerDeletion() {
-        val base = "line1\nline2\nline3"
+    fun testDeletionNonConflict() {
+        // Сервер удаляет строку, пользовательская версия без изменений.
+        val base = """
+            line1
+            line2
+            line3
+        """.trimIndent()
         val user = base
-        val server = "line1\nline3"  // удалена строка "line2" на сервере
+        val server = """
+            line1
+            line3
+        """.trimIndent()
 
-        val expected =
-            "line1\n<<<<<<< USER\nline2\n=======\nline3\n>>>>>>> SERVER\n<<<<<<< USER\nline3\n=======\n\n>>>>>>> SERVER"
+        val expected = """
+            line1
+            line3
+        """.trimIndent()
+
         val result = merger.merge(base, user, server)
-        println("testServerDeletion: merged result:")
-        println(result)
+        println("Test Deletion Non-Conflict:\n$result\n")
         assertEquals(expected, result)
     }
 
-    /**
-     * Тест: одновременная вставка одной и той же строки пользователем и сервером.
-     * При идентичном изменении патчи совпадают и merge должен вернуть итоговую версию без конфликтов.
-     */
     @Test
-    fun testSimultaneousInsertionSame() {
-        val base = "line1\nline2"
-        val user = "line1\ninserted\nline2"
-        val server = "line1\ninserted\nline2"
+    fun testBothSidesInsertionConflict() {
+        // Обе стороны вставляют строку в одно и то же место, но вставленные строки различны.
+        val base = """
+            line1
+            line2
+            line3
+        """.trimIndent()
+        val user = """
+            line1
+            user inserted line after line1
+            line2
+            line3
+        """.trimIndent()
+        val server = """
+            line1
+            server inserted line after line1
+            line2
+            line3
+        """.trimIndent()
 
-        val expected = "line1\ninserted\nline2"
+        val expected = """
+            line1
+            <<<<<<< USER
+            user inserted line after line1
+            =======
+            server inserted line after line1
+            >>>>>>> SERVER
+            line2
+            line3
+        """.trimIndent()
+
         val result = merger.merge(base, user, server)
-        println("testSimultaneousInsertionSame: merged result:")
-        println(result)
+        println("Test Both Sides Insertion Conflict:\n$result\n")
         assertEquals(expected, result)
     }
 
-    /**
-     * Тест: одновременные изменения, но с конфликтом — изменение разных частей одной и той же версии.
-     */
     @Test
-    fun testSimultaneousConflictChanges() {
-        val base = "line1\nline2\nline3"
-        val user = "line1 changed\nline2\nline3"
-        val server = "line1\nline2 changed\nline3"
+    fun testMultipleLineConflict() {
+        // Обе стороны изменяют несколько подряд идущих строк, отличающихся от базовой версии.
+        val base = """
+            line1
+            line2
+            line3
+            line4
+            line5
+        """.trimIndent()
+        val user = """
+            line1
+            line2 modified by user
+            line3 modified by user
+            line4
+            line5 modified by user
+            line6
+        """.trimIndent()
+        val server = """
+            line1
+            line2 modified by server
+            line3 modified by server
+            line4
+            line5
+            line6
+        """.trimIndent()
 
-        val expected =
-            "<<<<<<< USER\nline1 changed\n=======\nline1\n>>>>>>> SERVER\n<<<<<<< USER\nline2\n=======\nline2 changed\n>>>>>>> SERVER\nline3"
+        val expected = """
+            line1
+            <<<<<<< USER
+            line2 modified by user
+            line3 modified by user
+            line4
+            line5 modified by user
+            =======
+            line2 modified by server
+            line3 modified by server
+            line4
+            line5
+            >>>>>>> SERVER
+            line6
+        """.trimIndent()
+
         val result = merger.merge(base, user, server)
-        println("testSimultaneousConflictChanges: merged result:")
-        println(result)
+        println("Test Multiple Line Conflict:\n$result\n")
         assertEquals(expected, result)
     }
 
-    /**
-     * Тест: совершенно отличающиеся изменения.
-     */
     @Test
-    fun testCompletelyDifferentChanges() {
-        val base = "A"
-        val user = "B"
-        val server = "C"
-
-        val expected = "<<<<<<< USER\nB\n=======\nC\n>>>>>>> SERVER"
-        val result = merger.merge(base, user, server)
-        println("testCompletelyDifferentChanges: merged result:")
-        println(result)
-        assertEquals(expected, result)
-    }
-
-    /**
-     * Тест: вставка строк в конце файла с различным содержимым.
-     */
-    @Test
-    fun testInsertionAtEnd() {
-        val base = "line1\nline2"
-        val user = "line1\nline2\nline3"
-        val server = "line1\nline2\nline4"
-
-        val expected = "line1\nline2\n<<<<<<< USER\nline3\n=======\nline4\n>>>>>>> SERVER"
-        val result = merger.merge(base, user, server)
-        println("testInsertionAtEnd: merged result:")
-        println(result)
-        assertEquals(expected, result)
-    }
-
-    /**
-     * Тест: пустая базовая версия. Пользователь вносит изменения, а сервер оставляет пустым.
-     */
-    @Test
-    fun testEmptyBase() {
+    fun testEmptyFiles() {
+        // Все версии пустые строки.
         val base = ""
-        val user = "User text"
+        val user = ""
         val server = ""
 
-        val expected = "<<<<<<< USER\nUser text\n=======\n\n>>>>>>> SERVER"
+        val expected = ""
+
         val result = merger.merge(base, user, server)
-        println("testEmptyBase: merged result:")
-        println(result)
+        println("Test Empty Files:\n$result\n")
+        assertEquals(expected, result)
+    }
+
+    @Test
+    fun testWhitespaceChangesConflict() {
+        // Изменение только пробельных символов считается изменением.
+        val base = """
+            line1
+            line2
+            line3
+        """.trimIndent()
+        val user = """
+            line1
+            line2  
+            line3
+        """.trimIndent()  // Обратите внимание на лишние пробелы после line2
+        val server = base
+
+        // Поскольку сравнение идёт по строгому равенству строк, возникнет конфликт.
+        val expected = """
+            line1
+            line2  
+            line3
+        """.trimIndent()
+
+        val result = merger.merge(base, user, server)
+        println("Test Whitespace Changes Conflict:\n$result\n")
         assertEquals(expected, result)
     }
 }

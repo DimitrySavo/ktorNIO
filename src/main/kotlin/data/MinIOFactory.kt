@@ -69,8 +69,8 @@ fun replaceFileMinio(uid: UUID, type: StorageItemsIds, content: String): Functio
         println("Updated file in minio successfully")
         FunctionResult.Success(Unit)
     } catch (ex: Exception) {
-        println("Error while updating")
-        FunctionResult.Error("Error while updating")
+        println("Error while updating file: $uid in minio")
+        FunctionResult.Error("Error while updating file: $uid in minio")
     }
 }
 
@@ -79,7 +79,7 @@ fun readFromFile(uid: String) : FunctionResult<String> {
         val stream = MinIOFactory.minio.getObject(
             GetObjectArgs.builder()
                 .bucket(MinIOFactory.bucketName)
-                .`object`(uid.toString())
+                .`object`(uid)
                 .build()
         )
 

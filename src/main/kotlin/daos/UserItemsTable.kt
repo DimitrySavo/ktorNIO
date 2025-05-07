@@ -1,10 +1,14 @@
 package com.example.daos
 
+import com.example.MetadataUpdateRequest
 import com.example.utils.FunctionResult
 import com.example.StorageItemResponse
+import com.example.TextUpdateRequest
 import com.example.data.createFileInMinio
 import com.example.data.readFromFile
 import com.example.data.replaceFileMinio
+import com.example.utils.Locker
+import com.example.utils.theewaysmerge.ThreeWayMerge
 import com.github.difflib.DiffUtils
 import org.bitbucket.cowwoc.diffmatchpatch.DiffMatchPatch
 import org.jetbrains.exposed.sql.*
@@ -15,12 +19,13 @@ import java.sql.SQLException
 import java.time.Instant
 import java.util.*
 
+
 object UserItemsTable : Table("useritems") {
     val uid = uuid("uid")
     val parent_id = uuid("parent_uid").nullable()
     val name = varchar("name", 255)
     val type = integer("type").references(StorageItemsTypesTable.typeId)
-    val version = text("version")
+    val version = text("version").nullable()
     val owner_id = uuid("owner_id").references(Users.userId)
     val created_at = timestamp("created_at")
     val updated_at = timestamp("updated_at")
@@ -32,7 +37,7 @@ object UserItemsTable : Table("useritems") {
         user_id: UUID,
         name: String,
         type: StorageItemsIds
-    ) : FunctionResult<String> {
+    ): FunctionResult<String> {
         return try {
             transaction {
                 insert {
@@ -41,12 +46,12 @@ object UserItemsTable : Table("useritems") {
                     it[this.owner_id] = user_id
                     it[this.name] = name
                     it[this.type] = type.id
-                    it[this.version] = "null"
+                    it[this.version] = null
                 }
 
                 if (type != StorageItemsIds.folder) {
                     val result = createFileInMinio(uid, type)
-                    if(result is FunctionResult.Error) {
+                    if (result is FunctionResult.Error) {
                         throw Exception("MinIO file creation failed: ${result.message}")
                     }
                 }
@@ -62,26 +67,47 @@ object UserItemsTable : Table("useritems") {
         }
     }
 
-    fun getItemVersion(uid: UUID): FunctionResult<String> {
+    fun checkIsThereAnItem(uid: UUID): FunctionResult<Unit> {
         return try {
-            val version = transaction {
-                select(version)
-                    .where { UserItemsTable.uid eq uid  }
-                    .singleOrNull()
-                    ?.get(version)
+            val result = transaction {
+                UserItemsTable.select(UserItemsTable.uid)
+                    .where { UserItemsTable.uid eq uid }
+                    .firstOrNull() != null
             }
 
-            if(version == null) {
-                FunctionResult.Error("Version is null")
+            if (result) {
+                FunctionResult.Success(Unit)
             } else {
-                FunctionResult.Success(version.toString())
+                FunctionResult.Error("Can't find item with such")
             }
+        } catch (ex: SQLException) {
+            println("Get an sql exception: $ex")
+            FunctionResult.Error("Sql exception")
+        } catch (ex: Exception) {
+            println("Get exception: $ex")
+            FunctionResult.Error("Get exception")
+        }
+    }
+
+    fun getItemVersion(uid: UUID): FunctionResult<String?> {
+        return try {
+            val row = transaction {
+                UserItemsTable.selectAll()
+                    .where { UserItemsTable.uid eq uid }
+                    .singleOrNull()
+            }
+
+            if (row == null) {
+                return FunctionResult.Error("Can't get item with such uid: $uid")
+            }
+
+            return FunctionResult.Success(row[version])
         } catch (ex: Exception) {
             FunctionResult.Error("Get an error ${ex.message}")
         }
     }
 
-    fun softItemDeletion(uid: UUID) : FunctionResult<Unit> {
+    fun softItemDeletion(uid: UUID): FunctionResult<Unit> {
         return try {
             transaction {
                 val childItems = select(UserItemsTable.uid)
@@ -107,158 +133,100 @@ object UserItemsTable : Table("useritems") {
         }
     }
 
-    fun updateItem(
-        uid: UUID,
-        fileContent: String? = null,
-        name: String? = null,
-        parentId: UUID? = null,
-        type: StorageItemsIds
-    ) : FunctionResult<Unit> {
+    fun updateMetadata(instance: MetadataUpdateRequest, userUid: UUID, itemUUID: UUID): FunctionResult<Unit> {
         return try {
-            // Add check for existing file, for is file delete and other stuff
-            if (type != StorageItemsIds.folder) {
-                if(fileContent != null) {
-                    replaceFileMinio(
-                        uid,
-                        type,
-                        fileContent
-                    )
+            val updateCount = Locker.withAdvisoryLock(itemUUID) {
+                UserItemsTable.update({
+                    (UserItemsTable.uid eq itemUUID) and (UserItemsTable.owner_id eq userUid)
+                }) {
+                    if (instance.name != null) {
+                        it[UserItemsTable.name] = instance.name
+                    }
+                    it[UserItemsTable.parent_id] = instance.parentUid
                 }
             }
-
-
-            val hashSum = if(type == StorageItemsIds.md && fileContent != null) computeHashVersion(fileContent) else null
-
-            transaction {
-                UserItemsTable.update({ UserItemsTable.uid eq uid }) { row ->
-                    row[updated_at] = Instant.now()
-                    if (name != null) {
-                        row[UserItemsTable.name] = name
-                    }
-                    if (parentId != null) {
-                        row[parent_id] = parentId
-                    }
-                    if (hashSum != null) {
-                        row[version] = hashSum
-                    }
-                }
-            }
-            println("Updated item in db successfully")
+            println("updateMetadata successfully updated $updateCount rows")
             FunctionResult.Success(Unit)
+        } catch (ex: Locker.ResourceLockException) {
+            println("updateMetadata function resource lock exception: $ex")
+            return FunctionResult.Error("Can't lock resource right now")
         } catch (ex: Exception) {
-            println("Exception in updateItem: ${ex.message}")
-            FunctionResult.Error("Exception: ${ex.message}")
+            println("updateMetadata function exception: $ex")
+            FunctionResult.Error("Can't find item or internal server error")
         }
     }
 
+    fun updateTextFile(instance: TextUpdateRequest, userUid: UUID, itemUUID: UUID): FunctionResult<String> {
+        return try {
+            Locker.withAdvisoryLock(itemUUID) {
+                val row = UserItemsTable.selectAll()
+                    .where { uid eq itemUUID }
+                    .singleOrNull()
 
-
-    fun updateItemWithVersion(
-        uid: UUID,
-        name: String? = null,
-        parentId: UUID? = null,
-        version: String,
-        baseline: String,
-        modifiedText: String,
-        type: StorageItemsIds
-    ): FunctionResult<Unit> {
-        println("Get into updateItemWithVersion")
-        val dmp = DiffMatchPatch()
-        println("Create dmp")
-
-        val lockAcquired = try {
-            println("Get into lock try")
-            transaction {
-                println("Get into lock transaction")
-                exec("select pg_advisory_lock(hashtext(\'$uid\'))")
-            }
-            println("Lock is good")
-            true
-        } catch (e: Exception) {
-            println("Get an exception: $e")
-            false
-        }
-
-        println("Lock is: $lockAcquired")
-
-        if (!lockAcquired) {
-            println("Can't lock resource in updateItemWithVersion")
-            return FunctionResult.Error("Can't lock resource")
-        }
-
-        val serverVersion = transaction {
-            select(UserItemsTable.version)
-                .where { UserItemsTable.uid eq uid }
-                .singleOrNull()?.get(UserItemsTable.version)
-        }
-
-        println("Server version is: $serverVersion")
-
-        if (serverVersion == version || serverVersion == null) {
-            //Just replacing server text with new one from client. Cuz if we don't have difference between baseline and server version so we either don't need to calculate diffs
-            replaceFileMinio(
-                uid = uid,
-                type = type,
-                content = modifiedText,
-            )
-
-            val hashSum = computeHashVersion(modifiedText)
-
-            transaction {
-                UserItemsTable.update({ UserItemsTable.uid eq uid }) { row ->
-                    row[updated_at] = Instant.now()
-                    row[UserItemsTable.version] = hashSum
-                    if (name != null) row[UserItemsTable.name] = name
-                    if (parentId != null) row[parent_id] = parentId
+                if (row == null) {
+                    return@withAdvisoryLock FunctionResult.Error("There is no file with such uid")
                 }
-            }
+                val serverVersion = row[version]
 
-            transaction {
-                exec("select pg_advisory_unlock(hashtext($uid))")
-            }
-            println("Item successfully updated cuz don't have any changes on server")
-            return FunctionResult.Success(Unit)
-        } else {
-            //считаем patch для версии пользователя и для серверной версии. Дальше смотрим а наличие конфликтов и получаем еще один if
-            println("Start calculating patches")
-            when (val serverText = readFromFile(uid.toString())) {
-                is FunctionResult.Error -> {
-                    println("Can't read from file")
-                    return FunctionResult.Error("Can't read from file")
-                }
-                is FunctionResult.Success -> {
-                    println("Baseline: $baseline")
-                    println("Server Text: ${serverText.data}")
-                    println("Modified Text: $modifiedText")
+                if (serverVersion == instance.version || serverVersion == null) {
+                    //replace item
 
+                    return@withAdvisoryLock storeAndUpdateVersion(
+                        itemUUID = itemUUID,
+                        content = instance.content,
+                        userUid = userUid
+                    )
+                } else {
+                    //3way merge item
+                    when (val serverText = readFromFile(itemUUID.toString())) {
+                        is FunctionResult.Error -> {
+                            println("Can't read file from minio with uid = $itemUUID")
+                            return@withAdvisoryLock serverText
+                        }
 
+                        is FunctionResult.Success -> {
+                            val mergeResult =
+                                ThreeWayMerge().merge(
+                                    base = instance.baseline,
+                                    server = serverText.data,
+                                    user = instance.content
+                                )
 
-                    println("Finish merge process")
-                    return FunctionResult.Success(Unit)
+                            println("Content for user $userUid is merged: $mergeResult\n")
 
-                   /* val serverDiff = dmp.diffMain(baseline, serverText.data)
-                    val userDiff = dmp.diffMain(baseline, modifiedText)
-
-                    val userPatches = dmp.patchMake(baseline, userDiff)
-                    val serverPatches = dmp.patchMake(baseline, serverDiff)
-
-                    val (patchedBaseline, serverResult) = dmp.patchApply(serverPatches, baseline)
-
-                    println("Server patches result: ${(serverResult as BooleanArray).joinToString()}}")
-                    println("Sever new text: $patchedBaseline")
-
-                    val (finalText, userResult) = dmp.patchApply(userPatches, patchedBaseline as String)
-
-                    // work but has some issues with complicated merges and give false as result on some changes. Should add handler to false value in result array
-                    println("Final patches result: ${(userResult as BooleanArray).joinToString()}")
-                    println("Final new text: $finalText")
-
-                    transaction {
-                        exec("select pg_advisory_unlock(hashtext(\'$uid\'))")
+                            return@withAdvisoryLock storeAndUpdateVersion(
+                                itemUUID = itemUUID,
+                                content = mergeResult,
+                                userUid = userUid
+                            )
+                        }
                     }
-                    println("Poka hz che-to proizoshlo")
-                    return FunctionResult.Success(Unit)*/
                 }
+            }
+        } catch (ex: Exception) {
+            println("updateTextFile function exception: $ex")
+            FunctionResult.Error("Can't find item or internal server error")
+        }
+    }
+
+    private fun storeAndUpdateVersion(
+        itemUUID: UUID,
+        content: String,
+        userUid: UUID
+    ): FunctionResult<String> {
+        return when (val replacementResult = replaceFileMinio(
+            uid = itemUUID,
+            type = StorageItemsIds.md,
+            content = content
+        )) {
+            is FunctionResult.Error -> replacementResult
+
+            is FunctionResult.Success -> {
+                val newVersion = computeHashVersion(content)
+                UserItemsTable.update({ uid eq itemUUID }) {
+                    it[version] = newVersion
+                }
+                FunctionResult.Success("File $itemUUID for user $userUid updated successfully")
             }
         }
     }
@@ -320,21 +288,23 @@ object UserItemsTable : Table("useritems") {
         }
     }
 
-    fun computeHashVersion(content: String) : String {
+    fun computeHashVersion(content: String): String {
         val md = MessageDigest.getInstance("SHA-256")
         val digest = md.digest(content.toByteArray())
         return digest.joinToString("") { "%02x".format(it) }
     }
 
-    fun isItemOwnedByUser(userId: UUID, itemUUID: UUID) : FunctionResult<Boolean> {
+    fun isItemOwnedByUser(userId: UUID, itemUUID: UUID): FunctionResult<Boolean> {
         return try {
-            FunctionResult.Success(
-                UserItemsTable.selectAll()
-                    .where {
-                        (UserItemsTable.uid eq itemUUID) and
-                                (UserItemsTable.owner_id eq userId)
-                    }.limit(1).any()
-            )
+            transaction {
+                FunctionResult.Success(
+                    UserItemsTable.selectAll()
+                        .where {
+                            (uid eq itemUUID) and
+                                    (owner_id eq userId)
+                        }.limit(1).any()
+                )
+            }
         } catch (ex: Exception) {
             println("Get an exception: $ex")
             return FunctionResult.Error("Get an exception: $ex")

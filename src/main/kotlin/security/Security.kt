@@ -139,7 +139,7 @@ object JWTConfig {
             .withAudience(audience)
             .withIssuer(issuer)
             .withClaim("userId", userId.toString())
-            .withExpiresAt(Date.from(Instant.now().plus(1, ChronoUnit.MONTHS)))
+            .withExpiresAt(Date.from(Instant.now().plus(30, ChronoUnit.DAYS)))
             .sign(Algorithm.HMAC256(refreshSecret))
     }
 

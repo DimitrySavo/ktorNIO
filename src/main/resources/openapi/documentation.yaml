@@ -278,7 +278,7 @@ paths:
 
   /update/{uid}:
     put:
-      summary: Обновление объекта по UUID
+      summary: Обновление объекта по UUID (текст или метаданные)
       parameters:
         - name: uid
           in: path
@@ -288,45 +288,25 @@ paths:
             format: uuid
         - $ref: '#/components/parameters/AccessTokenHeader'
       security:
-        - accessToken: []
+        - accessToken: [ ]
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UpdateObject'
+              oneOf:
+                - $ref: '#/components/schemas/TextUpdateRequest'
+                - $ref: '#/components/schemas/MetadataUpdateRequest'
+              discriminator:
+                propertyName: type
+                mapping:
+                  text: '#/components/schemas/TextUpdateRequest'
+                  metadata: '#/components/schemas/MetadataUpdateRequest'
       responses:
         '200':
           description: Успешное обновление, возвращает uid
         '400':
           description: Ошибка валидации или некорректный тип
-        '401':
-          description: Неавторизован
-
-  /updateVersioned/{uid}:
-    put:
-      summary: Версионированное обновление объекта
-      parameters:
-        - name: uid
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - $ref: '#/components/parameters/AccessTokenHeader'
-      security:
-        - accessToken: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/UpdateObjectWithVersion'
-      responses:
-        '200':
-          description: Успешное обновление версии, возвращает uid
-        '400':
-          description: Ошибка валидации данных
         '401':
           description: Неавторизован
 
@@ -646,3 +626,60 @@ components:
       required:
         - version
         - content
+
+    UpdateRequest:
+      type: object
+      required:
+        - type
+      properties:
+        type:
+          type: string
+      discriminator:
+        propertyName: type
+
+    TextUpdateRequest:
+      allOf:
+        - $ref: '#/components/schemas/UpdateRequest'
+        - type: object
+          properties:
+            type:
+              type: string
+              enum: [ 'text' ]
+            version:
+              type: string
+              nullable: true
+            baseline:
+              type: string
+            content:
+              type: string
+          required:
+            - type
+            - baseline
+            - content
+          example:
+            type: text
+            version: "not same version"
+            baseline: ""
+            content: "New and new here content\nfor file some new text that should be added to "
+
+    MetadataUpdateRequest:
+      allOf:
+        - $ref: '#/components/schemas/UpdateRequest'
+        - type: object
+          properties:
+            type:
+              type: string
+              enum: [ 'metadata' ]
+            name:
+              type: string
+              nullable: true
+            parentUid:
+              type: string
+              format: uuid
+              nullable: true
+          required:
+            - type
+          example:
+            type: metadata
+            name: "Новый заголовок"
+            parentUid: "3fa85f64-5717-4562-b3fc-2c963f66afa6"

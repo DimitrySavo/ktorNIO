@@ -52,6 +52,9 @@ dependencies {
     // https://mvnrepository.com/artifact/io.github.cdimascio/dotenv-kotlin
     implementation("io.github.cdimascio:dotenv-kotlin:6.5.1")
 
+    // https://github.com/eclipse-jgit/jgit
+    implementation("org.eclipse.jgit:org.eclipse.jgit:7.2.0.202503040940-r")
+
     implementation("io.ktor:ktor-server-core")
     implementation("io.ktor:ktor-server-auth")
     implementation("io.ktor:ktor-server-auth-jwt")

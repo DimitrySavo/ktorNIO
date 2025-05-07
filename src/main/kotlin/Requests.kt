@@ -1,12 +1,13 @@
 package com.example
 
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.encoding.Decoder
-import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
-import java.util.UUID
+import kotlinx.serialization.encoding.Decoder
+import kotlinx.serialization.encoding.Encoder
+import java.util.*
 
 object UUIDSerializer : KSerializer<UUID> {
     override val descriptor = PrimitiveSerialDescriptor("UUID", PrimitiveKind.STRING)
@@ -77,29 +78,23 @@ data class ItemObject(
 )
 
 @Serializable
-data class UpdateObject(
-    val type: String,
-    val data: UpdateItem
-)
+sealed class UpdateRequest
 
 @Serializable
-data class UpdateObjectWithVersion(
-    val name: String,
-    @Serializable(with = UUIDSerializer::class)
-    val parentId: UUID? = null,
-    val version: String,
-    val baseline: String,
-    val modifiedText: String,
-    val type: String
-)
-
-@Serializable
-data class UpdateItem (
-    val fileContent: String? = null,
+@SerialName("metadata")
+data class MetadataUpdateRequest(
     val name: String? = null,
     @Serializable(with = UUIDSerializer::class)
-    val parent_id: UUID? = null
-)
+    val parentUid: UUID? = null
+) : UpdateRequest()
+
+@Serializable
+@SerialName("text")
+data class TextUpdateRequest(
+    val version: String?,
+    val baseline: String,
+    val content: String
+) : UpdateRequest()
 
 @Serializable
 data class StorageItemResponse (

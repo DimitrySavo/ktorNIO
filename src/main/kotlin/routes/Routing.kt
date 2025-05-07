@@ -2,6 +2,7 @@ package com.example.routes
 
 import com.example.*
 import com.example.daos.*
+import com.example.data.readFromFile
 import com.example.handlers.*
 import com.example.security.JWTConfig
 import com.example.utils.FunctionResult
@@ -16,26 +17,28 @@ import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import org.jetbrains.exposed.sql.Except
 import org.koin.ktor.ext.get
+import org.w3c.dom.Text
 import java.util.*
 
 fun Application.configureRouting() {
     routing {
+        // region Registration
         post("/register/local") {
             val userRequest = call.receive<RegisterUser>()
 
-            if(userRequest.username == "") {
+            if (userRequest.username == "") {
                 println("username issue")
                 call.respond(HttpStatusCode.BadRequest)
                 return@post
             }
 
-            if(userRequest.password == "") {
+            if (userRequest.password == "") {
                 println("password issue")
                 call.respond(HttpStatusCode.BadRequest)
                 return@post
             }
 
-            if(userRequest.userEmail?.matches(Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\$")) == false) {
+            if (userRequest.userEmail?.matches(Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\$")) == false) {
                 println("email issue")
                 call.respond(HttpStatusCode.BadRequest)
                 return@post
@@ -47,7 +50,7 @@ fun Application.configureRouting() {
                 password = userRequest.password!!
             )
 
-            if(userId != null) {
+            if (userId != null) {
                 val token = JWTConfig.getToken(userId)
                 val refreshToken = JWTConfig.getRefreshToken(userId)
                 call.respond(HttpStatusCode.OK, mapOf("token" to token, "refresh_token" to refreshToken))
@@ -72,7 +75,7 @@ fun Application.configureRouting() {
                 accountId = userRequest.accountId
             )
 
-            if(userId != null) {
+            if (userId != null) {
                 val token = JWTConfig.getToken(userId)
                 val refreshToken = JWTConfig.getRefreshToken(userId)
                 call.respond(HttpStatusCode.OK, mapOf("token" to token, "refresh_token" to refreshToken))
@@ -81,22 +84,24 @@ fun Application.configureRouting() {
                 return@post
             }
         }
+        //endregion
 
+        //region Login
         post("/login/local") {
             val loginRequest = call.receive<LoginUser>()
 
-            if(!loginRequest.userEmail.matches(Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\$"))) {
+            if (!loginRequest.userEmail.matches(Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\$"))) {
                 call.respond(HttpStatusCode.BadRequest)
             }
 
-            if(loginRequest.password == "") {
+            if (loginRequest.password == "") {
                 call.respond(HttpStatusCode.BadRequest)
             }
 
             val authResult = Users.verifyCredentials(loginRequest.userEmail, loginRequest.password)
             val userId = Users.getUserIdByEmail(loginRequest.userEmail)
 
-            if(authResult && userId != null) {
+            if (authResult && userId != null) {
                 val token = JWTConfig.getToken(userId)
                 val refreshToken = JWTConfig.getRefreshToken(userId)
                 call.respond(HttpStatusCode.OK, mapOf("token" to token, "refresh_token" to refreshToken))
@@ -123,7 +128,9 @@ fun Application.configureRouting() {
                 call.respond(HttpStatusCode.Unauthorized, "Bad credentials")
             }
         }
+        //endregion
 
+        // region Reset password
         post("get_otp_code") {
             val request = call.receive<ResetPasswordEmail>()
             val userEmail = request.email
@@ -200,7 +207,8 @@ fun Application.configureRouting() {
                     return@patch
                 }
 
-                when (val updateResult = Users.updateUserPassword(userUid = userUid, newPassword = request.newPassword)) {
+                when (val updateResult =
+                    Users.updateUserPassword(userUid = userUid, newPassword = request.newPassword)) {
                     is OperationResult.ServerError -> {
                         call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Server error"))
                         return@patch
@@ -218,13 +226,15 @@ fun Application.configureRouting() {
                 }
             }
         }
+        //endregion
 
+        //region Refresh token
         authenticate("refresh-jwt") {
             get("/refresh") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = Helpers.getUserUidFromToken(principal)
 
-                if(userId != null) {
+                if (userId != null) {
                     val token = JWTConfig.getToken(userId)
                     call.respond(HttpStatusCode.OK, mapOf("token" to token))
                 } else {
@@ -232,30 +242,36 @@ fun Application.configureRouting() {
                 }
             }
         }
+        //endregion
 
         authenticate("auth-jwt") {
             get("/jwt/test") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = Helpers.getUserUidFromToken(principal)
 
-                if(userId != null) {
+                if (userId != null) {
                     call.respond(HttpStatusCode.OK, mapOf("userId" to userId))
                 } else {
                     call.respond(HttpStatusCode.Unauthorized, "Bad credentials")
                 }
             }
 
+
             post("/create") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = Helpers.getUserUidFromToken(principal)
 
-                if(userId != null) {
+                if (userId != null) {
                     try {
                         val createInstance = call.receive<CreateObject>()
                         val result = userItemCreationHandler(createInstance, userId)
 
                         when (result) {
-                            is FunctionResult.Error -> call.respond(HttpStatusCode.BadRequest, mapOf("error" to result.message))
+                            is FunctionResult.Error -> call.respond(
+                                HttpStatusCode.InternalServerError,
+                                mapOf("error" to result.message)
+                            )
+
                             is FunctionResult.Success<*> -> call.respond(HttpStatusCode.Created)
                         }
 
@@ -271,114 +287,94 @@ fun Application.configureRouting() {
                 }
             }
 
-            delete("/delete/{uid}") {
-                val uidParameter = call.parameters["uid"]
-                if(uidParameter == null) {
-                    call.respond(HttpStatusCode.BadRequest, "Missing uid parameter")
-                    return@delete
-                }
+            //region Updating items
+            put("update/{uid}") {
+                val itemUidParam = call.parameters["uid"]
+                val principal = call.principal<JWTPrincipal>()
+                val userId = Helpers.getUserUidFromToken(principal)
 
-                try {
-                    val uid = UUID.fromString(uidParameter)
-
-                    when(val result = handleItemDelete(uid)) {
-                        is FunctionResult.Success -> call.respond(HttpStatusCode.OK, mapOf("uid" to uid.toString()))
-                        is FunctionResult.Error -> call.respond(HttpStatusCode.InternalServerError, mapOf("error" to result.message))
-                    }
-                    return@delete
-                } catch (ex: Exception) {
-                    println("Get an exception: ${ex.message}")
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to ex.message))
-                }
-            }
-
-            put("/test") {
-                println("Get into rofls lol")
-                call.respond(HttpStatusCode.OK)
-            }
-
-            put("/update/{uid}"){
-                println("Get into put")
-
-                val uidParameter = call.parameters["uid"]
-                val updateInstance = call.receive<UpdateObject>()
-                val type = StorageItemsIds.entries.firstOrNull { it.name.equals(updateInstance.type, ignoreCase = true) }
-
-                if (type == null) {
-                    call.respond(HttpStatusCode.BadRequest, "Bad type")
+                if (userId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, "Can't get userId form token")
                     return@put
                 }
 
-                if(uidParameter == null) {
-                    call.respond(HttpStatusCode.BadRequest, "Missing uid parameter")
+                val itemUid = try {
+                    UUID.fromString(itemUidParam)
+                } catch (ex: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, "Invalid item uid format")
                     return@put
                 }
 
                 try {
-                    val uid = UUID.fromString(uidParameter)
+                    when (val isOwned = UserItemsTable.isItemOwnedByUser(userId, itemUid)) {
+                        is FunctionResult.Error -> {
+                            call.respond(
+                                HttpStatusCode.InternalServerError,
+                                mapOf("error" to "Can't check owner of selected item")
+                            )
+                            return@put
+                        }
 
-                    val result = updateHandler(
-                        instance = updateInstance,
-                        uid = uid,
-                        type = type
-                    )
+                        is FunctionResult.Success -> {
+                            if (isOwned.data) {
+                                val updateInstance = call.receive<UpdateRequest>()
+                                if (updateInstance == null) {
+                                    println("Update instance is null")
+                                    return@put
+                                }
 
-                    when (result) {
-                        is FunctionResult.Success -> call.respond(HttpStatusCode.OK, mapOf("uid" to uid.toString()))
-                        is FunctionResult.Error -> call.respond(HttpStatusCode.BadRequest, mapOf("error" to result.message))
+                                when (updateInstance) {
+                                    is TextUpdateRequest -> {
+                                        when (val result = UserItemsTable.updateTextFile(
+                                            instance = updateInstance,
+                                            userUid = userId,
+                                            itemUUID = itemUid
+                                        )) {
+                                            is FunctionResult.Error -> {
+                                                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to result.message))
+                                                return@put
+                                            }
+
+                                            is FunctionResult.Success -> {
+                                                call.respond(HttpStatusCode.OK)
+                                                return@put
+                                            }
+                                        }
+                                    }
+
+                                    is MetadataUpdateRequest -> {
+                                        when (val result = UserItemsTable.updateMetadata(
+                                            instance = updateInstance,
+                                            userUid = userId,
+                                            itemUUID = itemUid
+                                        )) {
+                                            is FunctionResult.Error -> {
+                                                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to result.message))
+                                                return@put
+                                            }
+
+                                            is FunctionResult.Success -> {
+                                                call.respond(HttpStatusCode.OK)
+                                                return@put
+                                            }
+                                        }
+                                    }
+                                }
+                            } else {
+                                call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Item not owned by user"))
+                                return@put
+                            }
+                        }
                     }
-
-                    return@put
                 } catch (ex: Exception) {
-                    println("Get an exception: ${ex.message}")
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to ex.message))
+                    println("Get and exceptiong while parsing UpdateRequest")
+                    return@put
                 }
             }
+            //endregion
 
-            put("/updateVersioned/{uid}") {
-                println("Get into update with version")
-
-                val uidParameter = call.parameters["uid"]
-                val updateInstance = call.receive<UpdateObjectWithVersion>()
-                val type = StorageItemsIds.entries.firstOrNull { it.name.equals(updateInstance.type, ignoreCase = true) }
-
-                if (type == null) {
-                    call.respond(HttpStatusCode.BadRequest, "Bad type")
-                    return@put
-                }
-
-                if(uidParameter == null) {
-                    call.respond(HttpStatusCode.BadRequest, "Missing uid parameter")
-                    return@put
-                }
-
-                try {
-                    val uid = UUID.fromString(uidParameter)
-
-                    //replace with a handler or mb replace request at all
-                    val result = UserItemsTable.updateItemWithVersion(
-                        uid = uid,
-                        name = updateInstance.name,
-                        parentId = updateInstance.parentId,
-                        version = updateInstance.version,
-                        baseline = updateInstance.baseline,
-                        modifiedText = updateInstance.modifiedText,
-                        type = type
-                    )
-
-                    when (result) {
-                        is FunctionResult.Success -> call.respond(HttpStatusCode.OK, mapOf("uid" to uid.toString()))
-                        is FunctionResult.Error -> call.respond(HttpStatusCode.BadRequest, mapOf("error" to result.message))
-                    }
-
-                    return@put
-                } catch (ex: Exception) {
-                    println("Get an exception: ${ex.message}")
-                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to ex.message))
-                }
-            }
-
-            get("/items"){
+            //region Getting items
+            get("/items") {
                 val principal = call.principal<JWTPrincipal>()
                 val userId = Helpers.getUserUidFromToken(principal)
 
@@ -392,7 +388,11 @@ fun Application.configureRouting() {
                     val result = UserItemsTable.getUserItems(userId)
 
                     when (result) {
-                        is FunctionResult.Error -> call.respond(HttpStatusCode.BadRequest, mapOf("error" to result.message))
+                        is FunctionResult.Error -> call.respond(
+                            HttpStatusCode.InternalServerError,
+                            mapOf("error" to result.message)
+                        )
+
                         is FunctionResult.Success -> call.respond(HttpStatusCode.OK, result.data)
                     }
 
@@ -403,8 +403,8 @@ fun Application.configureRouting() {
                 }
             }
 
-            get("/items/{itemUid}") {
-                val itemUidParam = call.parameters["itemUid"]
+            get("/items/{uid}") {
+                val itemUidParam = call.parameters["uid"]
                 val principal = call.principal<JWTPrincipal>()
                 val userId = Helpers.getUserUidFromToken(principal)
 
@@ -421,14 +421,105 @@ fun Application.configureRouting() {
                 }
 
                 try {
-                    val result = getUserItemContent(itemUid, userId)
+                    when (val isOwned = UserItemsTable.isItemOwnedByUser(userId, itemUid)) {
+                        is FunctionResult.Error -> {
+                            call.respond(
+                                HttpStatusCode.InternalServerError,
+                                mapOf("error" to "Can't check owner of selected item")
+                            )
+                            return@get
+                        }
 
-                    when(result) {
-                        is FunctionResult.Error -> call.respond(HttpStatusCode.NotFound, mapOf("error" to result.message))
-                        is FunctionResult.Success -> call.respond(HttpStatusCode.OK, result.data)
+                        is FunctionResult.Success -> {
+                            if (isOwned.data) {
+                                val resultMap = mutableMapOf<String, String?>()
+
+                                when (val fileVersion = UserItemsTable.getItemVersion(itemUid)) {
+                                    is FunctionResult.Error -> {
+                                        call.respond(HttpStatusCode.InternalServerError, mapOf("error" to fileVersion.message))
+                                        return@get
+                                    }
+
+                                    is FunctionResult.Success -> {
+                                        resultMap["version"] = fileVersion.data
+                                    }
+                                }
+
+                                when (val fileContent = readFromFile(itemUid.toString())) {
+                                    is FunctionResult.Error -> {
+                                        call.respond(HttpStatusCode.InternalServerError, mapOf("error" to fileContent.message))
+                                        return@get
+                                    }
+
+                                    is FunctionResult.Success -> {
+                                        resultMap["version"] = fileContent.data
+                                    }
+                                }
+
+                                call.respond(HttpStatusCode.OK, resultMap)
+                                return@get
+                            } else {
+                                call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Item not owned by user"))
+                                return@get
+                            }
+                        }
                     }
 
-                    return@get
+
+                } catch (ex: Exception) {
+                    println("Get an exception: ${ex.message}")
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to ex.message))
+                }
+            }
+            //endregion
+
+            // region Deletion
+            delete("/delete/{uid}") {
+                val itemUidParam = call.parameters["uid"]
+                val principal = call.principal<JWTPrincipal>()
+                val userId = Helpers.getUserUidFromToken(principal)
+
+                if (userId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, "Can't get userId form token")
+                    return@delete
+                }
+
+                val itemUid = try {
+                    UUID.fromString(itemUidParam)
+                } catch (ex: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, "Invalid item uid format")
+                    return@delete
+                }
+
+                try {
+                    when (val isOwned = UserItemsTable.isItemOwnedByUser(userId, itemUid)) {
+                        is FunctionResult.Error -> {
+                            call.respond(
+                                HttpStatusCode.InternalServerError,
+                                mapOf("error" to "Can't check owner of selected item")
+                            )
+                            return@delete
+                        }
+
+                        is FunctionResult.Success -> {
+                            if (isOwned.data) {
+                                when (val result = UserItemsTable.softItemDeletion(itemUid)) {
+                                    is FunctionResult.Error -> {
+                                        call.respond(HttpStatusCode.InternalServerError, mapOf("error" to result.message))
+                                        return@delete
+                                    }
+
+                                    is FunctionResult.Success -> {
+                                        call.respond(HttpStatusCode.OK)
+                                        return@delete
+                                    }
+                                }
+                            } else {
+                                call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Item not owned by user"))
+                                return@delete
+                            }
+                        }
+                    }
                 } catch (ex: Exception) {
                     println("Get an exception: ${ex.message}")
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to ex.message))
@@ -448,7 +539,11 @@ fun Application.configureRouting() {
                     val result = UserItemsTable.getDeletedUserItems(userId)
 
                     when (result) {
-                        is FunctionResult.Error -> call.respond(HttpStatusCode.BadRequest, mapOf("error" to result.message))
+                        is FunctionResult.Error -> call.respond(
+                            HttpStatusCode.InternalServerError,
+                            mapOf("error" to result.message)
+                        )
+
                         is FunctionResult.Success -> call.respond(HttpStatusCode.OK, result.data)
                     }
 
@@ -458,6 +553,7 @@ fun Application.configureRouting() {
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to ex.message))
                 }
             }
+            //endregion
         }
     }
 }
