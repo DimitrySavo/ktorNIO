@@ -5,13 +5,13 @@ import com.example.utils.FunctionResult
 import com.example.StorageItemResponse
 import com.example.TextUpdateRequest
 import com.example.data.createFileInMinio
+import com.example.data.deleteFileInMinio
 import com.example.data.readFromFile
 import com.example.data.replaceFileMinio
 import com.example.utils.Locker
 import com.example.utils.theewaysmerge.ThreeWayMerge
-import com.github.difflib.DiffUtils
-import org.bitbucket.cowwoc.diffmatchpatch.DiffMatchPatch
 import org.jetbrains.exposed.sql.*
+import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.javatime.timestamp
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.security.MessageDigest
@@ -22,7 +22,11 @@ import java.util.*
 
 object UserItemsTable : Table("useritems") {
     val uid = uuid("uid")
-    val parent_id = uuid("parent_uid").nullable()
+    val parent_id = uuid("parent_uid").references(
+        UserItemsTable.uid,
+        onDelete = ReferenceOption.CASCADE,
+        onUpdate = ReferenceOption.CASCADE
+    ).nullable()
     val name = varchar("name", 255)
     val type = integer("type").references(StorageItemsTypesTable.typeId)
     val version = text("version").nullable()
@@ -78,7 +82,7 @@ object UserItemsTable : Table("useritems") {
             if (result) {
                 FunctionResult.Success(Unit)
             } else {
-                FunctionResult.Error("Can't find item with such")
+                FunctionResult.Error("Can't find item with such uid")
             }
         } catch (ex: SQLException) {
             println("Get an sql exception: $ex")
@@ -109,7 +113,7 @@ object UserItemsTable : Table("useritems") {
 
     fun softItemDeletion(uid: UUID): FunctionResult<Unit> {
         return try {
-            transaction {
+            Locker.withAdvisoryLock(uid) {
                 val childItems = select(UserItemsTable.uid)
                     .where { parent_id eq uid }
                     .map { it[UserItemsTable.uid] }
@@ -124,6 +128,9 @@ object UserItemsTable : Table("useritems") {
             }
             println("Soft deleted db item successfully")
             FunctionResult.Success(Unit)
+        } catch (ex: Locker.ResourceLockException) {
+            println("softItemDeletion function resource lock exception: $ex")
+            return FunctionResult.Error("Can't lock resource right now")
         } catch (ex: SQLException) {
             println("Get sql exception: ${ex.message}")
             FunctionResult.Error(ex.toString())
@@ -203,6 +210,9 @@ object UserItemsTable : Table("useritems") {
                     }
                 }
             }
+        } catch (ex: Locker.ResourceLockException) {
+            println("updateTextFile function resource lock exception: $ex")
+            return FunctionResult.Error("Can't lock resource right now")
         } catch (ex: Exception) {
             println("updateTextFile function exception: $ex")
             FunctionResult.Error("Can't find item or internal server error")
@@ -287,6 +297,107 @@ object UserItemsTable : Table("useritems") {
             FunctionResult.Error(ex.toString())
         }
     }
+
+    fun permanentDeleteItem(userUid: UUID, itemUid: UUID): FunctionResult<Unit> {
+        return try {
+            Locker.withAdvisoryLock(itemUid) {
+                when (val storageResult = deleteFileInMinio(itemUid)) {
+                    is FunctionResult.Error -> {
+                        return@withAdvisoryLock storageResult
+                    }
+
+                    is FunctionResult.Success -> {
+                        UserItemsTable.deleteWhere {
+                            uid eq itemUid
+                        }
+                        return@withAdvisoryLock FunctionResult.Success(Unit)
+                    }
+                }
+            }
+        } catch (ex: Locker.ResourceLockException) {
+            println("permanentDeleteItem function resource lock exception: $ex")
+            FunctionResult.Error("Can't lock resource right now")
+        } catch (ex: Exception) {
+            println("permanentDeleteItem function exception: $ex")
+            FunctionResult.Error("Can't delete item for some reason")
+        }
+    }
+
+    fun restoreDeletedItem(userUid: UUID, itemUid: UUID): FunctionResult<Unit> {
+        return try {
+            Locker.withAdvisoryLock(itemUid) {
+                val deletedFile = UserItemsTable.selectAll()
+                    .where { uid eq itemUid and deleted_at.isNotNull() }
+                    .singleOrNull()
+
+                if (deletedFile == null) {
+                    return@withAdvisoryLock FunctionResult.Error("Can't get deleted item with such uid")
+                }
+
+                val deletedName = deletedFile[name]
+
+                val isExistWithName = UserItemsTable.selectAll()
+                    .where {
+                        (name eq deletedName) and
+                                (parent_id.isNull()) and
+                                (deleted_at.isNull())
+                    }.singleOrNull()
+
+                if (isExistWithName == null) {
+                    UserItemsTable.update({ uid eq itemUid }) {
+                        it[parent_id] = null
+                        it[deleted_at] = null
+                    }
+
+                    return@withAdvisoryLock FunctionResult.Success(Unit)
+                } else {
+                    val newName = generateNewName(deletedName)
+                    UserItemsTable.update({ uid eq itemUid }) {
+                        it[name] = newName
+                        it[parent_id] = null
+                        it[deleted_at] = null
+                    }
+
+                    return@withAdvisoryLock FunctionResult.Success(Unit)
+                }
+            }
+        } catch (ex: Locker.ResourceLockException) {
+            println("restoreDeletedItem function resource lock exception: $ex")
+            FunctionResult.Error("Can't lock resource right now")
+        } catch (ex: Exception) {
+            println("restoreDeletedItem function exception: $ex")
+            FunctionResult.Error("Can't delete item for some reason")
+        }
+    }
+
+    fun generateNewName(rawName: String): String {
+        val oldName = normalizeName(rawName)
+        val suffixRegex = Regex("""^${Regex.escape(oldName)}_(\d+)$""")
+
+        val existingNames = transaction {
+            UserItemsTable
+                .select(UserItemsTable.name)
+                .where {
+                    UserItemsTable.name.like("${oldName}_%")
+                        .and(UserItemsTable.parent_id.isNull())
+                        .and(UserItemsTable.deleted_at.isNull())
+                }.map { it[UserItemsTable.name] }
+        }
+
+        val maxIndex = existingNames
+            .mapNotNull { name ->
+                suffixRegex.find(name)?.groupValues?.get(1)?.toInt()
+            }.maxOrNull() ?: 0
+
+        return "${oldName}_${maxIndex + 1}"
+    }
+
+    fun normalizeName(name: String): String {
+        val pattern = Regex("^(.*)_(\\d+)$")
+        val match = pattern.matchEntire(name)
+        return match?.groupValues?.get(1) ?: name
+    }
+
 
     fun computeHashVersion(content: String): String {
         val md = MessageDigest.getInstance("SHA-256")

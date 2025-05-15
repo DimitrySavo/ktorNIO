@@ -3,11 +3,9 @@ package com.example.data
 import com.example.utils.FunctionResult
 import com.example.daos.StorageItemsIds
 import io.ktor.server.application.Application
-import io.minio.BucketExistsArgs
-import io.minio.GetObjectArgs
-import io.minio.MakeBucketArgs
-import io.minio.MinioClient
-import io.minio.PutObjectArgs
+import io.minio.*
+import io.minio.errors.MinioException
+import org.jetbrains.exposed.sql.Min
 import java.io.ByteArrayInputStream
 import java.util.UUID
 
@@ -86,6 +84,29 @@ fun readFromFile(uid: String) : FunctionResult<String> {
         FunctionResult.Success(stream.bufferedReader().use { it.readText() })
     } catch (ex: Exception) {
         FunctionResult.Error("Error while reading from file")
+    }
+}
+
+fun deleteFileInMinio(uid: UUID) : FunctionResult<Unit> {
+    return try {
+        val bucket = MinIOFactory.bucketName
+        val uidString = uid.toString()
+
+        MinIOFactory.minio.removeObject(
+            RemoveObjectArgs.builder()
+                .bucket(bucket)
+                .`object`(uidString)
+                .build()
+        )
+
+        println("Successfully removed object $uid")
+        FunctionResult.Success(Unit)
+    } catch (ex: MinioException) {
+        println("Failed to delete $uid from MinIO $ex")
+        FunctionResult.Error("MinIO error: ${ex.message}")
+    } catch (ex: Exception) {
+        println("I/O error on deleting $uid from MinIO $ex" )
+        FunctionResult.Error("I/O error: ${ex.message}")
     }
 }
 

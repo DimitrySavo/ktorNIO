@@ -110,7 +110,7 @@ fun Application.configureRouting() {
             }
         }
 
-        post("login/other") {
+        post("/login/other") {
             val loginRequest = call.receive<LoginUserOAuth>()
             val authType = AuthTypes.entries.find { loginRequest.type == it.name }
 
@@ -131,7 +131,7 @@ fun Application.configureRouting() {
         //endregion
 
         // region Reset password
-        post("get_otp_code") {
+        post("/get_otp_code") {
             val request = call.receive<ResetPasswordEmail>()
             val userEmail = request.email
 
@@ -153,46 +153,46 @@ fun Application.configureRouting() {
             }
         }
 
-        get("check_otp_code") {
+        post("/check_otp_code") {
             val request = call.receive<ResetPasswordOtp>()
             val otp = request.otp
 
             if (request.userEmail.isNullOrBlank()) {
                 call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Empty user email"))
-                return@get
+                return@post
             }
             val userId = Users.getUserIdByEmail(request.userEmail)
 
             if (otp.isNullOrBlank()) {
                 call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Missing or empty OTP"))
-                return@get
+                return@post
             }
 
             if (userId != null) {
                 when (val checkResult = PasswordResetCodes.validateAndUseResetCode(userId, otp)) {
                     is OperationResult.ServerError -> {
                         call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Server error"))
-                        return@get
+                        return@post
                     }
 
                     is OperationResult.UserError -> {
                         call.respond(HttpStatusCode.BadRequest, mapOf("error" to "Bad otp or otp expired"))
-                        return@get
+                        return@post
                     }
 
                     is OperationResult.Success -> {
                         call.respond(HttpStatusCode.OK, mapOf("token" to JWTConfig.getResetPasswordSecret(userId)))
-                        return@get
+                        return@post
                     }
                 }
             } else {
                 call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Bad credentials"))
-                return@get
+                return@post
             }
         }
 
         authenticate("reset-password-jwt") {
-            patch("reset_password") {
+            patch("/reset_password") {
                 val request = call.receive<ResetPasswordNew>()
                 val principal = call.receive<JWTPrincipal>()
                 val userUid = Helpers.getUserUidFromToken(principal)
@@ -288,7 +288,7 @@ fun Application.configureRouting() {
             }
 
             //region Updating items
-            put("update/{uid}") {
+            put("/update/{uid}") {
                 val itemUidParam = call.parameters["uid"]
                 val principal = call.principal<JWTPrincipal>()
                 val userId = Helpers.getUserUidFromToken(principal)
@@ -474,7 +474,59 @@ fun Application.configureRouting() {
             //endregion
 
             // region Deletion
-            delete("/delete/{uid}") {
+            patch("/items/{uid}/soft_delete") {
+                val itemUidParam = call.parameters["uid"]
+                val principal = call.principal<JWTPrincipal>()
+                val userId = Helpers.getUserUidFromToken(principal)
+
+                if (userId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, "Can't get userId form token")
+                    return@patch
+                }
+
+                val itemUid = try {
+                    UUID.fromString(itemUidParam)
+                } catch (ex: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, "Invalid item uid format")
+                    return@patch
+                }
+
+                try {
+                    when (val isOwned = UserItemsTable.isItemOwnedByUser(userId, itemUid)) {
+                        is FunctionResult.Error -> {
+                            call.respond(
+                                HttpStatusCode.InternalServerError,
+                                mapOf("error" to "Can't check owner of selected item")
+                            )
+                            return@patch
+                        }
+
+                        is FunctionResult.Success -> {
+                            if (isOwned.data) {
+                                when (val result = UserItemsTable.softItemDeletion(itemUid)) {
+                                    is FunctionResult.Error -> {
+                                        call.respond(HttpStatusCode.InternalServerError, mapOf("error" to result.message))
+                                        return@patch
+                                    }
+
+                                    is FunctionResult.Success -> {
+                                        call.respond(HttpStatusCode.OK)
+                                        return@patch
+                                    }
+                                }
+                            } else {
+                                call.respond(HttpStatusCode.Unauthorized, "Item not owned by user")
+                                return@patch
+                            }
+                        }
+                    }
+                } catch (ex: Exception) {
+                    println("Get an exception: ${ex.message}")
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to ex.message))
+                }
+            }
+
+            delete("items/{uid}/delete_permanent") {
                 val itemUidParam = call.parameters["uid"]
                 val principal = call.principal<JWTPrincipal>()
                 val userId = Helpers.getUserUidFromToken(principal)
@@ -492,7 +544,7 @@ fun Application.configureRouting() {
                 }
 
                 try {
-                    when (val isOwned = UserItemsTable.isItemOwnedByUser(userId, itemUid)) {
+                    when (val isOwner = UserItemsTable.isItemOwnedByUser(userId, itemUid)) {
                         is FunctionResult.Error -> {
                             call.respond(
                                 HttpStatusCode.InternalServerError,
@@ -502,8 +554,9 @@ fun Application.configureRouting() {
                         }
 
                         is FunctionResult.Success -> {
-                            if (isOwned.data) {
-                                when (val result = UserItemsTable.softItemDeletion(itemUid)) {
+                            if (isOwner.data) {
+                                when (val result =
+                                    UserItemsTable.permanentDeleteItem(userUid = userId, itemUid = itemUid)) {
                                     is FunctionResult.Error -> {
                                         call.respond(HttpStatusCode.InternalServerError, mapOf("error" to result.message))
                                         return@delete
@@ -515,8 +568,61 @@ fun Application.configureRouting() {
                                     }
                                 }
                             } else {
-                                call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Item not owned by user"))
+                                call.respond(HttpStatusCode.Unauthorized, "Item not owned by user")
                                 return@delete
+                            }
+                        }
+                    }
+                } catch (ex: Exception) {
+                    println("Get an exception: ${ex.message}")
+                    call.respond(HttpStatusCode.BadRequest, mapOf("error" to ex.message))
+                }
+            }
+
+            patch("/items/{uid}/restore") {
+                val itemUidParam = call.parameters["uid"]
+                val principal = call.principal<JWTPrincipal>()
+                val userId = Helpers.getUserUidFromToken(principal)
+
+                if (userId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, "Can't get userId form token")
+                    return@patch
+                }
+
+                val itemUid = try {
+                    UUID.fromString(itemUidParam)
+                } catch (ex: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, "Invalid item uid format")
+                    return@patch
+                }
+
+                try {
+                    when (val isOwner = UserItemsTable.isItemOwnedByUser(userId, itemUid)) {
+                        is FunctionResult.Error -> {
+                            call.respond(
+                                HttpStatusCode.InternalServerError,
+                                mapOf("error" to "Can't check owner of selected item")
+                            )
+                            return@patch
+                        }
+
+                        is FunctionResult.Success -> {
+                            if (isOwner.data) {
+                                when (val result =
+                                    UserItemsTable.restoreDeletedItem(userUid = userId, itemUid = itemUid)) {
+                                    is FunctionResult.Error -> {
+                                        call.respond(HttpStatusCode.InternalServerError, mapOf("error" to result.message))
+                                        return@patch
+                                    }
+
+                                    is FunctionResult.Success -> {
+                                        call.respond(HttpStatusCode.OK)
+                                        return@patch
+                                    }
+                                }
+                            } else {
+                                call.respond(HttpStatusCode.Unauthorized, "Item not owned by user")
+                                return@patch
                             }
                         }
                     }
