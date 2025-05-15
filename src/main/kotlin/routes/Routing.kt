@@ -452,7 +452,7 @@ fun Application.configureRouting() {
                                     }
 
                                     is FunctionResult.Success -> {
-                                        resultMap["version"] = fileContent.data
+                                        resultMap["content"] = fileContent.data
                                     }
                                 }
 
