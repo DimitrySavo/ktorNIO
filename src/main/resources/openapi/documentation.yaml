@@ -1,4 +1,4 @@
-поopenapi: 3.0.1
+openapi: 3.0.1
 info:
   title: Example Ktor API
   version: 1.0.0
@@ -126,20 +126,14 @@ paths:
           description: Ошибка сервера при отправке кода
 
   /check_otp_code:
-    get:
+    post:
       summary: Проверка и использование OTP-кода
-      parameters:
-        - in: query
-          name: otp
-          schema:
-            type: string
-          required: true
-        - in: query
-          name: userEmail
-          schema:
-            type: string
-            format: email
-          required: true
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResetPasswordOtp'
       responses:
         '200':
           description: Код валиден, возвращает секрет для сброса пароля
@@ -237,42 +231,6 @@ paths:
           description: Объект успешно создан
         '400':
           description: Ошибка валидации данных
-        '401':
-          description: Неавторизован
-
-  /delete/{uid}:
-    delete:
-      summary: Удаление объекта по UUID
-      parameters:
-        - name: uid
-          in: path
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - $ref: '#/components/parameters/AccessTokenHeader'
-      security:
-        - accessToken: []
-      responses:
-        '200':
-          description: Успешное удаление, возвращает uid
-        '400':
-          description: Некорректный UUID
-        '401':
-          description: Неавторизован
-        '500':
-          description: Ошибка сервера при удалении
-
-  /test:
-    put:
-      summary: Тестовый PUT-маршрут
-      parameters:
-        - $ref: '#/components/parameters/AccessTokenHeader'
-      security:
-        - accessToken: []
-      responses:
-        '200':
-          description: Всегда OK
         '401':
           description: Неавторизован
 
@@ -378,6 +336,85 @@ paths:
           description: Ошибка при получении
         '401':
           description: Неавторизован
+
+  /items/{uid}/soft_delete:
+    patch:
+      summary: Пометить объект как удалённый (soft delete)
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/AccessTokenHeader'
+      security:
+        - accessToken: [ ]
+      responses:
+        '200':
+          description: Объект успешно помечен как удалённый
+        '400':
+          description: Некорректный UUID
+        '401':
+          description: Неавторизован
+        '500':
+          description: Ошибка сервера при пометке удаления
+
+  /items/{uid}/delete_permanent:
+    delete:
+      summary: Полное удаление объекта (permanent delete)
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/AccessTokenHeader'
+      security:
+        - accessToken: [ ]
+      responses:
+        '200':
+          description: Объект успешно удалён
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uid:
+                    type: string
+                    format: uuid
+        '400':
+          description: Некорректный UUID
+        '401':
+          description: Неавторизован
+        '500':
+          description: Ошибка сервера при удалении
+
+  /items/{uid}/restore:
+    patch:
+      summary: Восстановить ранее удалённый объект
+      parameters:
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - $ref: '#/components/parameters/AccessTokenHeader'
+      security:
+        - accessToken: [ ]
+      responses:
+        '200':
+          description: Объект успешно восстановлен
+        '400':
+          description: Некорректный UUID
+        '401':
+          description: Неавторизован
+        '404':
+          description: Объект не найден или не был удалён
+        '500':
+          description: Ошибка сервера при восстановлении
 
 components:
   securitySchemes:
@@ -507,7 +544,6 @@ components:
         newPassword:
           type: string
       required:
-        - email
         - newPassword
 
     CreateObject:
