@@ -40,7 +40,7 @@ object UserItemsTable : Table("useritems") {
         parent_id: UUID? = null,
         user_id: UUID,
         name: String,
-        type: StorageItemsIds
+        type: StorageItemsTypesTable.StorageType
     ): FunctionResult<String> {
         return try {
             transaction {

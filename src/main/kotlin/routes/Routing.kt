@@ -9,12 +9,14 @@ import com.example.utils.FunctionResult
 import com.example.utils.Helpers
 import com.example.utils.OperationResult
 import io.ktor.http.*
+import io.ktor.http.content.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
 import io.ktor.server.auth.jwt.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.Except
 import org.koin.ktor.ext.get
 import org.w3c.dom.Text
@@ -282,6 +284,40 @@ fun Application.configureRouting() {
                         return@post
                     }
 
+                } else {
+                    call.respond(HttpStatusCode.Unauthorized, "Bad credentials")
+                }
+            }
+
+            post("/upload") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = Helpers.getUserUidFromToken(principal)
+                val multipart = call.receiveMultipart()
+
+                if (userId != null) {
+                    try {
+                        val metadataPart = multipart.readPart()
+                        if (metadataPart !is PartData.FormItem || metadataPart.name != "metadata") {
+                            println("Part with metadata should go first")
+                            call.respond(HttpStatusCode.BadRequest, "Part with metadata should go first")
+                            return@post
+                        }
+                        val createInstance = Json.decodeFromString<CreateObject>(metadataPart.value)
+                        metadataPart.dispose
+
+                        val fileStreamPart = multipart.readPart()
+                        if (fileStreamPart !is PartData.FileItem || fileStreamPart.name != "file") {
+                            println("Error while getting file stream part. Mb error with naming. Current name is ${fileStreamPart.name}")
+                            call.respond(HttpStatusCode.BadRequest, "Error while getting file stream part")
+                            return@post
+                        }
+
+
+                    } catch (ex: Exception) {
+                        println("Get and exception in upload method: $ex")
+                        call.respond(HttpStatusCode.InternalServerError, mapOf("error" to ex.message))
+                        return@post
+                    }
                 } else {
                     call.respond(HttpStatusCode.Unauthorized, "Bad credentials")
                 }
