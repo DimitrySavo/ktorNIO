@@ -53,7 +53,7 @@ object UserItemsTable : Table("useritems") {
                     it[this.version] = null
                 }
 
-                if (type != StorageItemsIds.folder) {
+                if (type.id == 1) {
                     val result = createFileInMinio(uid, type)
                     if (result is FunctionResult.Error) {
                         throw Exception("MinIO file creation failed: ${result.message}")
