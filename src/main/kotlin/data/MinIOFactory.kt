@@ -6,9 +6,11 @@ import com.example.daos.StorageItemsTypesTable
 import io.ktor.server.application.Application
 import io.minio.*
 import io.minio.errors.MinioException
+import io.minio.http.Method
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.util.UUID
+import java.util.concurrent.TimeUnit
 
 object MinIOFactory {
     const val bucketName = "minio-storage-items"
@@ -34,7 +36,7 @@ fun createFileInMinio(
     objectSize: Long = 0,
     partSize: Long = -1,
     stream: InputStream = ByteArrayInputStream("".toByteArray())
-): FunctionResult<Unit> {
+): FunctionResult<Long> {
     return try {
         val bucket = MinIOFactory.bucketName
         val uidString = uid.toString()
@@ -48,11 +50,22 @@ fun createFileInMinio(
                 .build()
         )
         println("File created successfully")
-        FunctionResult.Success(Unit)
+
+        FunctionResult.Success(getFileSize(uid))
     } catch (ex: Exception) {
         println("Get excpetion in file creation ${ex.message}")
         FunctionResult.Error("Get exception while creating file")
     }
+}
+
+fun getFileSize(uid: UUID): Long {
+    val stat = MinIOFactory.minio.statObject(
+        StatObjectArgs.builder()
+            .bucket(MinIOFactory.bucketName)
+            .`object`(uid.toString())
+            .build()
+    )
+    return stat.size()
 }
 
 fun replaceFileMinio(uid: UUID, type: StorageItemsIds, content: String): FunctionResult<Unit> {
@@ -116,6 +129,16 @@ fun deleteFileInMinio(uid: UUID): FunctionResult<Unit> {
     }
 }
 
+fun createPresignedUrl(method: Method, expiryMinutes: Int, fileUid: String) : String {
+    return MinIOFactory.minio.getPresignedObjectUrl(
+        GetPresignedObjectUrlArgs.builder()
+            .method(method)
+            .bucket(MinIOFactory.bucketName)
+            .`object`(fileUid)
+            .expiry(expiryMinutes, TimeUnit.MINUTES)
+            .build()
+    )
+}
 
 fun Application.configureMinio() {
     try {

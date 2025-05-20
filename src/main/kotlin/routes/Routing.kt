@@ -2,10 +2,7 @@ package com.example.routes
 
 import com.example.*
 import com.example.daos.*
-import com.example.data.MinIOFactory
-import com.example.data.createFileInMinio
-import com.example.data.deleteFileInMinio
-import com.example.data.readFromFile
+import com.example.data.*
 import com.example.handlers.*
 import com.example.security.JWTConfig
 import com.example.utils.FunctionResult
@@ -20,6 +17,7 @@ import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
 import io.ktor.utils.io.jvm.javaio.*
+import io.minio.http.Method
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.Except
 import org.koin.ktor.ext.get
@@ -382,6 +380,52 @@ fun Application.configureRouting() {
                 }
             }
 
+            get("/items/download/{uid}") {
+                val itemUidParam = call.parameters["uid"]
+                val principal = call.principal<JWTPrincipal>()
+                val userId = Helpers.getUserUidFromToken(principal)
+
+                if (userId == null) {
+                    call.respond(HttpStatusCode.Unauthorized, "Can't get userId form token")
+                    return@get
+                }
+
+                val itemUid = try {
+                    UUID.fromString(itemUidParam)
+                } catch (ex: Exception) {
+                    call.respond(HttpStatusCode.BadRequest, "Invalid item uid format")
+                    return@get
+                }
+
+                try {
+                    when (val isOwned = UserItemsTable.isItemOwnedByUser(userId, itemUid)) {
+                        is FunctionResult.Error -> {
+                            call.respond(
+                                HttpStatusCode.InternalServerError,
+                                mapOf("error" to "Can't check owner of selected item")
+                            )
+                            return@get
+                        }
+
+                        is FunctionResult.Success -> {
+                            if (isOwned.data) {
+                                val url = createPresignedUrl(Method.GET, 15, itemUid.toString())
+                                val size = getFileSize(itemUid)
+                                call.respond(HttpStatusCode.OK, mapOf("url" to url, "size" to size))
+                                return@get
+                            } else {
+                                call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Item not owned by user"))
+                                return@get
+                            }
+                        }
+                    }
+                } catch (ex: Exception) {
+                    println("Get an exception: $ex")
+                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to ex.message))
+                    return@get
+                }
+            }
+
             //region Updating items
             put("/update/{uid}") {
                 val itemUidParam = call.parameters["uid"]
@@ -462,7 +506,8 @@ fun Application.configureRouting() {
                         }
                     }
                 } catch (ex: Exception) {
-                    println("Get and exceptiong while parsing UpdateRequest")
+                    println("Get an exception: $ex")
+                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to ex.message))
                     return@put
                 }
             }
