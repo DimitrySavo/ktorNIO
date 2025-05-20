@@ -2,11 +2,12 @@ package com.example.data
 
 import com.example.utils.FunctionResult
 import com.example.daos.StorageItemsIds
+import com.example.daos.StorageItemsTypesTable
 import io.ktor.server.application.Application
 import io.minio.*
 import io.minio.errors.MinioException
-import org.jetbrains.exposed.sql.Min
 import java.io.ByteArrayInputStream
+import java.io.InputStream
 import java.util.UUID
 
 object MinIOFactory {
@@ -27,18 +28,23 @@ object MinIOFactory {
 }
 
 
-fun createFileInMinio(uid: UUID, type: StorageItemsIds): FunctionResult<Unit> {
+fun createFileInMinio(
+    uid: UUID,
+    type: String,
+    objectSize: Long = 0,
+    partSize: Long = -1,
+    stream: InputStream = ByteArrayInputStream("".toByteArray())
+): FunctionResult<Unit> {
     return try {
         val bucket = MinIOFactory.bucketName
         val uidString = uid.toString()
-        val emptyContent = ByteArrayInputStream("".toByteArray())
 
         MinIOFactory.minio.putObject(
             PutObjectArgs.builder()
                 .bucket(bucket)
                 .`object`(uidString)
-                .stream(emptyContent, 0, -1)
-                .contentType(type.mimeType)
+                .stream(stream, objectSize, partSize)
+                .contentType(type)
                 .build()
         )
         println("File created successfully")
@@ -72,7 +78,7 @@ fun replaceFileMinio(uid: UUID, type: StorageItemsIds, content: String): Functio
     }
 }
 
-fun readFromFile(uid: String) : FunctionResult<String> {
+fun readFromFile(uid: String): FunctionResult<String> {
     return try {
         val stream = MinIOFactory.minio.getObject(
             GetObjectArgs.builder()
@@ -87,7 +93,7 @@ fun readFromFile(uid: String) : FunctionResult<String> {
     }
 }
 
-fun deleteFileInMinio(uid: UUID) : FunctionResult<Unit> {
+fun deleteFileInMinio(uid: UUID): FunctionResult<Unit> {
     return try {
         val bucket = MinIOFactory.bucketName
         val uidString = uid.toString()
@@ -105,7 +111,7 @@ fun deleteFileInMinio(uid: UUID) : FunctionResult<Unit> {
         println("Failed to delete $uid from MinIO $ex")
         FunctionResult.Error("MinIO error: ${ex.message}")
     } catch (ex: Exception) {
-        println("I/O error on deleting $uid from MinIO $ex" )
+        println("I/O error on deleting $uid from MinIO $ex")
         FunctionResult.Error("I/O error: ${ex.message}")
     }
 }

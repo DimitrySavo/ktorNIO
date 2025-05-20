@@ -54,7 +54,7 @@ object UserItemsTable : Table("useritems") {
                 }
 
                 if (type.id == 1) {
-                    val result = createFileInMinio(uid, type)
+                    val result = createFileInMinio(uid, type.mimeType)
                     if (result is FunctionResult.Error) {
                         throw Exception("MinIO file creation failed: ${result.message}")
                     }

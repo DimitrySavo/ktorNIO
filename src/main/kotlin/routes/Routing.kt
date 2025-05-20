@@ -2,6 +2,9 @@ package com.example.routes
 
 import com.example.*
 import com.example.daos.*
+import com.example.data.MinIOFactory
+import com.example.data.createFileInMinio
+import com.example.data.deleteFileInMinio
 import com.example.data.readFromFile
 import com.example.handlers.*
 import com.example.security.JWTConfig
@@ -16,10 +19,12 @@ import io.ktor.server.auth.jwt.*
 import io.ktor.server.request.*
 import io.ktor.server.response.*
 import io.ktor.server.routing.*
+import io.ktor.utils.io.jvm.javaio.*
 import kotlinx.serialization.json.Json
 import org.jetbrains.exposed.sql.Except
 import org.koin.ktor.ext.get
 import org.w3c.dom.Text
+import java.net.URLConnection
 import java.util.*
 
 fun Application.configureRouting() {
@@ -298,21 +303,75 @@ fun Application.configureRouting() {
                     try {
                         val metadataPart = multipart.readPart()
                         if (metadataPart !is PartData.FormItem || metadataPart.name != "metadata") {
+                            metadataPart?.dispose?.let { it() }
                             println("Part with metadata should go first")
                             call.respond(HttpStatusCode.BadRequest, "Part with metadata should go first")
                             return@post
                         }
                         val createInstance = Json.decodeFromString<CreateObject>(metadataPart.value)
-                        metadataPart.dispose
+                        metadataPart.dispose()
 
                         val fileStreamPart = multipart.readPart()
                         if (fileStreamPart !is PartData.FileItem || fileStreamPart.name != "file") {
-                            println("Error while getting file stream part. Mb error with naming. Current name is ${fileStreamPart.name}")
+                            fileStreamPart?.dispose?.let { it() }
+                            println("Error while getting file stream part. Mb error with naming. Current name is ${fileStreamPart?.name ?: "Name is empty"}")
                             call.respond(HttpStatusCode.BadRequest, "Error while getting file stream part")
                             return@post
                         }
+                        val type = fileStreamPart.contentType
+                            ?.toString()
+                            ?: URLConnection.guessContentTypeFromName(fileStreamPart.originalFileName)
+                            ?: "application/octet-stream"
 
+                        val types = StorageItemsTypesTable.getStorageTypes()
 
+                        if (types.isNullOrEmpty()) {
+                            call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Types is empty somehow"))
+                            return@post
+                        }
+
+                        val typeFromDatabase = types.find { type.startsWith(it.mimeType) }
+                        if (typeFromDatabase == null) {
+                            call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Unknown type"))
+                            return@post
+                        }
+
+                        try {
+                            val resultMinio = createFileInMinio(
+                                uid = createInstance.data.uid,
+                                type = type,
+                                objectSize = -1,
+                                partSize = 5L * 1024 * 1024,
+                                stream = fileStreamPart.provider().toInputStream()
+                            )
+
+                            when (resultMinio) {
+                                is FunctionResult.Error -> {
+                                    call.respond(HttpStatusCode.InternalServerError, mapOf("error" to resultMinio.message))
+                                    return@post
+                                }
+
+                                is FunctionResult.Success -> {
+                                    val resultDb = UserItemsTable.createItem(
+                                        uid = createInstance.data.uid,
+                                        parent_id = createInstance.data.parent_id,
+                                        user_id = userId,
+                                        name = createInstance.data.name,
+                                        type = typeFromDatabase
+                                    )
+
+                                    if (resultDb is FunctionResult.Error) {
+                                        deleteFileInMinio(createInstance.data.uid)
+                                        call.respond(HttpStatusCode.InternalServerError, mapOf("error" to resultDb.message))
+                                        return@post
+                                    }
+                                }
+                            }
+                        } finally {
+                            fileStreamPart.dispose()
+                        }
+                        call.respond(HttpStatusCode.OK, "File wroted successfully with uid ${createInstance.data.uid}")
+                        return@post
                     } catch (ex: Exception) {
                         println("Get and exception in upload method: $ex")
                         call.respond(HttpStatusCode.InternalServerError, mapOf("error" to ex.message))
