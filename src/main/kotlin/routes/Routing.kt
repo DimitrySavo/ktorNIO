@@ -411,7 +411,9 @@ fun Application.configureRouting() {
                             if (isOwned.data) {
                                 val url = createPresignedUrl(Method.GET, 15, itemUid.toString())
                                 val size = getFileSize(itemUid)
-                                call.respond(HttpStatusCode.OK, mapOf("url" to url, "size" to size))
+
+                                val result = FileDownloadUrl(url, size)
+                                call.respond(HttpStatusCode.OK, Json.encodeToString(result))
                                 return@get
                             } else {
                                 call.respond(HttpStatusCode.Unauthorized, mapOf("error" to "Item not owned by user"))

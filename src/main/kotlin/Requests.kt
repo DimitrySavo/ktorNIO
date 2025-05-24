@@ -111,6 +111,12 @@ data class StorageItemResponse (
 )
 
 @Serializable
+data class FileDownloadUrl(
+    val url: String,
+    val size: Long
+)
+
+@Serializable
 data class ItemContent(
     val version: String,
     val content: String

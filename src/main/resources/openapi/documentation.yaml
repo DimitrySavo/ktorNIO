@@ -2,11 +2,22 @@ openapi: 3.0.1
 info:
   title: Example Ktor API
   version: 1.0.0
+  description: API для управления пользователями и файлами с аутентификацией через JWT
+  contact:
+    name: API Support
+    email: support@example.com
+
+servers:
+  - url: http://localhost
+    description: Локальный сервер разработки
+
 paths:
   ## — Публичные (без JWT) — ##
   /register/local:
     post:
-      summary: Регистрация по e-mail и паролю
+      tags: [Authentication]
+      summary: Регистрация по email и паролю
+      operationId: registerLocal
       requestBody:
         required: true
         content:
@@ -15,24 +26,21 @@ paths:
               $ref: '#/components/schemas/RegisterUser'
       responses:
         '200':
-          description: Успешная регистрация, возвращает токены
+          description: Успешная регистрация
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  token:
-                    type: string
-                  refresh_token:
-                    type: string
+                $ref: '#/components/schemas/AuthTokens'
         '400':
-          description: Неверные данные запроса
+          $ref: '#/components/responses/BadRequest'
         '409':
-          description: Пользователь с таким e-mail уже существует
+          $ref: '#/components/responses/Conflict'
 
   /register/other:
     post:
+      tags: [Authentication]
       summary: Регистрация через OAuth
+      operationId: registerOAuth
       requestBody:
         required: true
         content:
@@ -41,24 +49,21 @@ paths:
               $ref: '#/components/schemas/RegisterUserWithOAuth'
       responses:
         '200':
-          description: Успешная регистрация, возвращает токены
+          description: Успешная регистрация
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  token:
-                    type: string
-                  refresh_token:
-                    type: string
+                $ref: '#/components/schemas/AuthTokens'
         '400':
-          description: Неправильный тип авторизации
+          $ref: '#/components/responses/BadRequest'
         '409':
-          description: Конфликт при создании (аккаунт уже существует)
+          $ref: '#/components/responses/Conflict'
 
   /login/local:
     post:
-      summary: Локальный вход по e-mail и паролю
+      tags: [Authentication]
+      summary: Локальный вход по email и паролю
+      operationId: loginLocal
       requestBody:
         required: true
         content:
@@ -67,24 +72,21 @@ paths:
               $ref: '#/components/schemas/LoginUser'
       responses:
         '200':
-          description: Успешная аутентификация, возвращает токены
+          description: Успешная аутентификация
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  token:
-                    type: string
-                  refresh_token:
-                    type: string
+                $ref: '#/components/schemas/AuthTokens'
         '400':
-          description: Неверный формат e-mail или пустой пароль
+          $ref: '#/components/responses/BadRequest'
         '401':
-          description: Неправильные учётные данные
+          $ref: '#/components/responses/Unauthorized'
 
   /login/other:
     post:
+      tags: [Authentication]
       summary: Вход через OAuth
+      operationId: loginOAuth
       requestBody:
         required: true
         content:
@@ -93,24 +95,21 @@ paths:
               $ref: '#/components/schemas/LoginUserOAuth'
       responses:
         '200':
-          description: Успешная аутентификация, возвращает токены
+          description: Успешная аутентификация
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  token:
-                    type: string
-                  refresh_token:
-                    type: string
+                $ref: '#/components/schemas/AuthTokens'
         '400':
-          description: Неправильный тип авторизации
+          $ref: '#/components/responses/BadRequest'
         '401':
-          description: Неправильные учётные данные
+          $ref: '#/components/responses/Unauthorized'
 
   /get_otp_code:
     post:
+      tags: [Password Recovery]
       summary: Отправка OTP-кода для сброса пароля
+      operationId: sendOtpCode
       requestBody:
         required: true
         content:
@@ -121,13 +120,15 @@ paths:
         '200':
           description: Код успешно отправлен
         '400':
-          description: Пустой или некорректный e-mail
+          $ref: '#/components/responses/BadRequest'
         '500':
-          description: Ошибка сервера при отправке кода
+          $ref: '#/components/responses/ServerError'
 
   /check_otp_code:
     post:
-      summary: Проверка и использование OTP-кода
+      tags: [Password Recovery]
+      summary: Проверка OTP-кода
+      operationId: verifyOtpCode
       requestBody:
         required: true
         content:
@@ -136,46 +137,47 @@ paths:
               $ref: '#/components/schemas/ResetPasswordOtp'
       responses:
         '200':
-          description: Код валиден, возвращает секрет для сброса пароля
+          description: Код валиден
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  token:
-                    type: string
+                $ref: '#/components/schemas/ResetPasswordToken'
         '400':
-          description: Плохой или просроченный код, или пустой e-mail
+          $ref: '#/components/responses/BadRequest'
         '401':
-          description: Пользователь не найден
+          $ref: '#/components/responses/Unauthorized'
         '500':
-          description: Ошибка сервера при валидации кода
+          $ref: '#/components/responses/ServerError'
 
   /reset_password:
     patch:
-      summary: Установка нового пароля после проверки OTP
+      tags: [Password Recovery]
+      summary: Установка нового пароля
+      operationId: resetPassword
       parameters:
         - $ref: '#/components/parameters/ResetPasswordTokenHeader'
+      security:
+        - resetPasswordToken: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: '#/components/schemas/ResetPasswordNew'
-      security:
-        - resetPasswordToken: []
       responses:
         '200':
           description: Пароль успешно изменён
         '400':
-          description: Пустые поля или пользователь не найден
+          $ref: '#/components/responses/BadRequest'
         '500':
-          description: Ошибка сервера при обновлении пароля
+          $ref: '#/components/responses/ServerError'
 
   ## — Защищённые JWT-маршруты — ##
   /refresh:
     get:
-      summary: Обновление access-токена по refresh-токену
+      tags: [Authentication]
+      summary: Обновление access-токена
+      operationId: refreshToken
       parameters:
         - $ref: '#/components/parameters/RefreshTokenHeader'
       security:
@@ -186,36 +188,34 @@ paths:
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  token:
-                    type: string
+                $ref: '#/components/schemas/AccessToken'
         '401':
-          description: Неправильный или просроченный refresh-токен
+          $ref: '#/components/responses/Unauthorized'
 
   /jwt/test:
     get:
-      summary: Тестовый маршрут JWT-аутентификации
+      tags: [Authentication]
+      summary: Тест JWT-аутентификации
+      operationId: testJwt
       parameters:
         - $ref: '#/components/parameters/AccessTokenHeader'
       security:
         - accessToken: []
       responses:
         '200':
-          description: Возвращает userId из токена
+          description: Успешная проверка
           content:
             application/json:
               schema:
-                type: object
-                properties:
-                  userId:
-                    type: string
+                $ref: '#/components/schemas/UserIdResponse'
         '401':
-          description: Неправильные учётные данные
+          $ref: '#/components/responses/Unauthorized'
 
   /create:
     post:
-      summary: Создание нового объекта пользователя
+      tags: [Items]
+      summary: Создание нового объекта
+      operationId: createItem
       parameters:
         - $ref: '#/components/parameters/AccessTokenHeader'
       security:
@@ -230,23 +230,97 @@ paths:
         '201':
           description: Объект успешно создан
         '400':
-          description: Ошибка валидации данных
+          $ref: '#/components/responses/BadRequest'
         '401':
-          description: Неавторизован
+          $ref: '#/components/responses/Unauthorized'
 
-  /update/{uid}:
-    put:
-      summary: Обновление объекта по UUID (текст или метаданные)
+  /upload:
+    post:
+      tags: [Items]
+      summary: Загрузка файла
+      operationId: uploadFile
       parameters:
+        - $ref: '#/components/parameters/AccessTokenHeader'
+      security:
+        - accessToken: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                metadata:
+                  type: string
+                  description: JSON метаданных файла
+                file:
+                  type: string
+                  format: binary
+                  description: Файл для загрузки
+      responses:
+        '200':
+          description: Файл успешно загружен
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                  uid:
+                    type: string
+                    format: uuid
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /items/download/{uid}:
+    get:
+      tags: [Items]
+      summary: Скачивание файла
+      operationId: downloadItem
+      parameters:
+        - $ref: '#/components/parameters/AccessTokenHeader'
         - name: uid
           in: path
           required: true
           schema:
             type: string
             format: uuid
-        - $ref: '#/components/parameters/AccessTokenHeader'
       security:
-        - accessToken: [ ]
+        - accessToken: []
+      responses:
+        '200':
+          description: URL для скачивания
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DownloadUrl'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /update/{uid}:
+    put:
+      tags: [Items]
+      summary: Обновление объекта
+      operationId: updateItem
+      parameters:
+        - $ref: '#/components/parameters/AccessTokenHeader'
+        - name: uid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      security:
+        - accessToken: []
       requestBody:
         required: true
         content:
@@ -262,120 +336,130 @@ paths:
                   metadata: '#/components/schemas/MetadataUpdateRequest'
       responses:
         '200':
-          description: Успешное обновление, возвращает uid
+          description: Успешное обновление
         '400':
-          description: Ошибка валидации или некорректный тип
+          $ref: '#/components/responses/BadRequest'
         '401':
-          description: Неавторизован
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
 
   /items:
     get:
-      summary: Список всех объектов пользователя
+      tags: [Items]
+      summary: Список объектов пользователя
+      operationId: listItems
       parameters:
         - $ref: '#/components/parameters/AccessTokenHeader'
       security:
         - accessToken: []
       responses:
         '200':
-          description: Массив объектов
+          description: Список объектов
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/StorageItemResponse'
-        '400':
-          description: Ошибка при получении
         '401':
-          description: Неавторизован
+          $ref: '#/components/responses/Unauthorized'
 
-  /items/{itemUid}:
+  /items/{uid}:
     get:
-      summary: Детальная информация об объекте
+      tags: [Items]
+      summary: Получение информации об объекте
+      operationId: getItem
       parameters:
-        - name: itemUid
+        - $ref: '#/components/parameters/AccessTokenHeader'
+        - name: uid
           in: path
           required: true
           schema:
             type: string
             format: uuid
-        - $ref: '#/components/parameters/AccessTokenHeader'
       security:
         - accessToken: []
       responses:
         '200':
-          description: Объект найден
+          description: Информация об объекте
           content:
             application/json:
               schema:
                 $ref: '#/components/schemas/ItemContent'
         '400':
-          description: Неверный UUID
+          $ref: '#/components/responses/BadRequest'
         '401':
-          description: Неавторизован
+          $ref: '#/components/responses/Unauthorized'
         '404':
-          description: Объект не найден
+          $ref: '#/components/responses/NotFound'
 
   /items/deleted:
     get:
-      summary: Список удалённых объектов пользователя
+      tags: [Items]
+      summary: Список удалённых объектов
+      operationId: listDeletedItems
       parameters:
         - $ref: '#/components/parameters/AccessTokenHeader'
       security:
         - accessToken: []
       responses:
         '200':
-          description: Массив удалённых объектов
+          description: Список удалённых объектов
           content:
             application/json:
               schema:
                 type: array
                 items:
                   $ref: '#/components/schemas/StorageItemResponse'
-        '400':
-          description: Ошибка при получении
         '401':
-          description: Неавторизован
+          $ref: '#/components/responses/Unauthorized'
 
   /items/{uid}/soft_delete:
     patch:
-      summary: Пометить объект как удалённый (soft delete)
+      tags: [Items]
+      summary: Мягкое удаление объекта
+      operationId: softDeleteItem
       parameters:
+        - $ref: '#/components/parameters/AccessTokenHeader'
         - name: uid
           in: path
           required: true
           schema:
             type: string
             format: uuid
-        - $ref: '#/components/parameters/AccessTokenHeader'
       security:
-        - accessToken: [ ]
+        - accessToken: []
       responses:
         '200':
-          description: Объект успешно помечен как удалённый
+          description: Объект помечен как удалённый
         '400':
-          description: Некорректный UUID
+          $ref: '#/components/responses/BadRequest'
         '401':
-          description: Неавторизован
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
-          description: Ошибка сервера при пометке удаления
+          $ref: '#/components/responses/ServerError'
 
   /items/{uid}/delete_permanent:
     delete:
-      summary: Полное удаление объекта (permanent delete)
+      tags: [Items]
+      summary: Полное удаление объекта
+      operationId: deleteItemPermanently
       parameters:
+        - $ref: '#/components/parameters/AccessTokenHeader'
         - name: uid
           in: path
           required: true
           schema:
             type: string
             format: uuid
-        - $ref: '#/components/parameters/AccessTokenHeader'
       security:
-        - accessToken: [ ]
+        - accessToken: []
       responses:
         '200':
-          description: Объект успешно удалён
+          description: Объект полностью удалён
           content:
             application/json:
               schema:
@@ -385,36 +469,40 @@ paths:
                     type: string
                     format: uuid
         '400':
-          description: Некорректный UUID
+          $ref: '#/components/responses/BadRequest'
         '401':
-          description: Неавторизован
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
         '500':
-          description: Ошибка сервера при удалении
+          $ref: '#/components/responses/ServerError'
 
   /items/{uid}/restore:
     patch:
-      summary: Восстановить ранее удалённый объект
+      tags: [Items]
+      summary: Восстановление объекта
+      operationId: restoreItem
       parameters:
+        - $ref: '#/components/parameters/AccessTokenHeader'
         - name: uid
           in: path
           required: true
           schema:
             type: string
             format: uuid
-        - $ref: '#/components/parameters/AccessTokenHeader'
       security:
-        - accessToken: [ ]
+        - accessToken: []
       responses:
         '200':
           description: Объект успешно восстановлен
         '400':
-          description: Некорректный UUID
+          $ref: '#/components/responses/BadRequest'
         '401':
-          description: Неавторизован
+          $ref: '#/components/responses/Unauthorized'
         '404':
-          description: Объект не найден или не был удалён
+          $ref: '#/components/responses/NotFound'
         '500':
-          description: Ошибка сервера при восстановлении
+          $ref: '#/components/responses/ServerError'
 
 components:
   securitySchemes:
@@ -422,45 +510,148 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: "Используется для большинства защищённых эндпоинтов (auth-jwt)"
+      description: Access token для аутентификации
     refreshToken:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: "Используется на /refresh (refresh-jwt)"
+      description: Refresh token для обновления access token
     resetPasswordToken:
       type: http
       scheme: bearer
       bearerFormat: JWT
-      description: "Используется на /reset_password после проверки OTP (reset-password-jwt)"
+      description: Временный токен для сброса пароля
 
   parameters:
     AccessTokenHeader:
       name: Authorization
       in: header
-      description: "Bearer-токен доступа"
+      description: Bearer access token
       required: true
       schema:
         type: string
-        example: "Bearer eyJhbGciOiJI…"
+        example: "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
     RefreshTokenHeader:
       name: Authorization
       in: header
-      description: "Bearer-токен обновления"
+      description: Bearer refresh token
       required: true
       schema:
         type: string
-        example: "Bearer eyJhbGciOiJI…"
+        example: "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
     ResetPasswordTokenHeader:
       name: Authorization
       in: header
-      description: "Bearer-токен для сброса пароля"
+      description: Bearer token для сброса пароля
       required: true
       schema:
         type: string
-        example: "Bearer eyJhbGciOiJI…"
+        example: "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+  responses:
+    BadRequest:
+      description: Неверный запрос
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+    Unauthorized:
+      description: Неавторизованный доступ
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+    NotFound:
+      description: Ресурс не найден
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+    Conflict:
+      description: Конфликт данных
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
+    ServerError:
+      description: Ошибка сервера
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: string
 
   schemas:
+    AuthTokens:
+      type: object
+      properties:
+        token:
+          type: string
+          description: Access token
+        refresh_token:
+          type: string
+          description: Refresh token
+      required:
+        - token
+        - refresh_token
+
+    AccessToken:
+      type: object
+      properties:
+        token:
+          type: string
+          description: Новый access token
+      required:
+        - token
+
+    UserIdResponse:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+      required:
+        - userId
+
+    ResetPasswordToken:
+      type: object
+      properties:
+        token:
+          type: string
+          description: Временный токен для сброса пароля
+      required:
+        - token
+
+    DownloadUrl:
+      type: object
+      properties:
+        url:
+          type: string
+          description: URL для скачивания файла
+        size:
+          type: integer
+          description: Размер файла в байтах
+      required:
+        - url
+        - size
+
+    # Все остальные схемы остаются без изменений
+    # (RegisterUser, RegisterUserWithOAuth, LoginUser, LoginUserOAuth и т.д.)
+    # ...
     RegisterUser:
       type: object
       properties:

@@ -3,6 +3,7 @@ package com.example.data
 import com.example.utils.FunctionResult
 import com.example.daos.StorageItemsIds
 import com.example.daos.StorageItemsTypesTable
+import io.github.cdimascio.dotenv.dotenv
 import io.ktor.server.application.Application
 import io.minio.*
 import io.minio.errors.MinioException
@@ -130,7 +131,10 @@ fun deleteFileInMinio(uid: UUID): FunctionResult<Unit> {
 }
 
 fun createPresignedUrl(method: Method, expiryMinutes: Int, fileUid: String) : String {
-    return MinIOFactory.minio.getPresignedObjectUrl(
+    val dotenv = dotenv()
+    val externalUrl = dotenv["MINIO_EXTERNAL_URL"]
+
+    val url = MinIOFactory.minio.getPresignedObjectUrl(
         GetPresignedObjectUrlArgs.builder()
             .method(method)
             .bucket(MinIOFactory.bucketName)
@@ -138,6 +142,8 @@ fun createPresignedUrl(method: Method, expiryMinutes: Int, fileUid: String) : St
             .expiry(expiryMinutes, TimeUnit.MINUTES)
             .build()
     )
+
+    return url.replace("http://minio:9000", externalUrl)
 }
 
 fun Application.configureMinio() {
