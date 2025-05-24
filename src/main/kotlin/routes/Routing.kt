@@ -199,7 +199,7 @@ fun Application.configureRouting() {
         authenticate("reset-password-jwt") {
             patch("/reset_password") {
                 val request = call.receive<ResetPasswordNew>()
-                val principal = call.receive<JWTPrincipal>()
+                val principal = call.principal<JWTPrincipal>()
                 val userUid = Helpers.getUserUidFromToken(principal)
 
                 if (request.newPassword.isNullOrBlank()) {
@@ -328,7 +328,7 @@ fun Application.configureRouting() {
                             return@post
                         }
 
-                        val typeFromDatabase = types.find { type.startsWith(it.mimeType) }
+                        val typeFromDatabase = types.find { type.startsWith(it.typeName) }
                         if (typeFromDatabase == null) {
                             call.respond(HttpStatusCode.InternalServerError, mapOf("error" to "Unknown type"))
                             return@post

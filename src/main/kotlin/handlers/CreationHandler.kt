@@ -15,7 +15,7 @@ fun userItemCreationHandler(instance: CreateObject, ownerId: UUID) : FunctionRes
         return FunctionResult.Error("Types is empty somehow")
     }
 
-    val type = types.find { it.mimeType == instance.type }
+    val type = types.find { it.typeName == instance.type }
     if (type == null) {
         return FunctionResult.Error("Unknown type")
     }
