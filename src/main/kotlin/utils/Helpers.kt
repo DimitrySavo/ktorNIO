@@ -1,5 +1,6 @@
 package com.example.utils
 
+import com.example.utils.logging.LogWriter
 import io.ktor.server.auth.jwt.*
 import org.jetbrains.exposed.sql.transactions.transaction
 import java.util.*
@@ -9,7 +10,7 @@ object Helpers {
         return try {
             UUID.fromString(principal?.payload?.getClaim("userId")?.asString())
         } catch (ex: Exception) {
-            println("Can't get userId from token: $ex")
+            LogWriter.log("getUserUidFromToken - Can't get userId from token: $ex")
             null
         }
     }

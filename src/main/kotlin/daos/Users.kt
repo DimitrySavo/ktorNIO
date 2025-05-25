@@ -2,6 +2,7 @@ package com.example.daos
 
 import com.example.utils.FunctionResult
 import com.example.utils.OperationResult
+import com.example.utils.logging.LogWriter
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.Table
 import org.jetbrains.exposed.sql.insert
@@ -90,7 +91,6 @@ object Users: Table("users") {
                 Users.username eq username
             }.singleOrNull()
         }
-        println(user)
     }
 
     fun getUserWithUid(userUid: UUID) : User? {
@@ -108,7 +108,7 @@ object Users: Table("users") {
                     }
             }
         } catch (ex: Exception) {
-            println("Get an exception: $ex")
+            LogWriter.log("getUserWithUid - Get an exception: $ex")
             return null
         }
     }
@@ -127,7 +127,7 @@ object Users: Table("users") {
                 OperationResult.Success(Unit)
             }
         } catch (ex: Exception) {
-            println("Get and exception: $ex")
+            LogWriter.log("updateUserPassword - Get and exception: $ex")
             return OperationResult.ServerError(message = "Get and exception while updating user password")
         }
     }

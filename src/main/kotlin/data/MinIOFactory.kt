@@ -3,6 +3,7 @@ package com.example.data
 import com.example.utils.FunctionResult
 import com.example.daos.StorageItemsIds
 import com.example.daos.StorageItemsTypesTable
+import com.example.utils.logging.LogWriter
 import io.github.cdimascio.dotenv.dotenv
 import io.ktor.server.application.Application
 import io.minio.*
@@ -50,11 +51,11 @@ fun createFileInMinio(
                 .contentType(type)
                 .build()
         )
-        println("File created successfully")
+        LogWriter.log("createFileInMinio - File created successfully")
 
         FunctionResult.Success(getFileSize(uid))
     } catch (ex: Exception) {
-        println("Get excpetion in file creation ${ex.message}")
+        LogWriter.log("createFileInMinio - Get excpetion in file creation ${ex.message}")
         FunctionResult.Error("Get exception while creating file")
     }
 }
@@ -84,10 +85,10 @@ fun replaceFileMinio(uid: UUID, type: StorageItemsIds, content: String): Functio
                 .build()
         )
 
-        println("Updated file in minio successfully")
+        LogWriter.log("replaceFileMinio - Updated file in minio successfully")
         FunctionResult.Success(Unit)
     } catch (ex: Exception) {
-        println("Error while updating file: $uid in minio")
+        LogWriter.log("replaceFileMinio - Error while updating file: $uid in minio")
         FunctionResult.Error("Error while updating file: $uid in minio")
     }
 }
@@ -119,13 +120,13 @@ fun deleteFileInMinio(uid: UUID): FunctionResult<Unit> {
                 .build()
         )
 
-        println("Successfully removed object $uid")
+        LogWriter.log("deleteFileInMinio - Successfully removed object $uid")
         FunctionResult.Success(Unit)
     } catch (ex: MinioException) {
-        println("Failed to delete $uid from MinIO $ex")
+        LogWriter.log("deleteFileInMinio - Failed to delete $uid from MinIO $ex")
         FunctionResult.Error("MinIO error: ${ex.message}")
     } catch (ex: Exception) {
-        println("I/O error on deleting $uid from MinIO $ex")
+        LogWriter.log("deleteFileInMinio - I/O error on deleting $uid from MinIO $ex")
         FunctionResult.Error("I/O error: ${ex.message}")
     }
 }
@@ -154,12 +155,12 @@ fun Application.configureMinio() {
                     .bucket(MinIOFactory.bucketName)
                     .build()
             )
-            println("Bucket created")
+            LogWriter.log("Application.configureMinio() - Bucket created")
         } else {
-            println("Bucket already exists")
+            LogWriter.log("Application.configureMinio() - already exists")
         }
     } catch (e: Exception) {
-        println("Error while creating bucket: ${e.message}")
+        LogWriter.log("Application.configureMinio() - Error while creating bucket: ${e.message}")
     }
 }
 

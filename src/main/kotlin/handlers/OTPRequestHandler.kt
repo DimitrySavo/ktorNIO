@@ -3,6 +3,7 @@ package com.example.handlers
 import com.example.daos.PasswordResetCodes
 import com.example.daos.Users
 import com.example.utils.FunctionResult
+import com.example.utils.logging.LogWriter
 import com.example.utils.mail.EmailSender
 
 fun OTPRequestHandler(userEmail: String) : FunctionResult<String> {
@@ -13,7 +14,7 @@ fun OTPRequestHandler(userEmail: String) : FunctionResult<String> {
         val username = Users.getUserWithUid(userUid)?.username
 
         if (username == null) {
-            println("Username is null for userUid: $userUid (email: $userEmail)")
+            LogWriter.log("OTPRequestHandler - Username is null for userUid: $userUid (email: $userEmail)")
             return FunctionResult.Error("Username is null for userUid: $userUid (email: $userEmail)")
         }
 
@@ -41,7 +42,7 @@ fun OTPRequestHandler(userEmail: String) : FunctionResult<String> {
             }
         }
     } catch (ex: Exception) {
-        println("Get an exception: $ex")
+        LogWriter.log("OTPRequestHandler - Get an exception: $ex")
         return FunctionResult.Error("Internal server error during OTP request")
     }
 }

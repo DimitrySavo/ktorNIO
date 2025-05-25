@@ -2,6 +2,7 @@ package com.example.daos
 
 import com.example.utils.FunctionResult
 import com.example.utils.OperationResult
+import com.example.utils.logging.LogWriter
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
 import org.jetbrains.exposed.sql.javatime.timestamp
@@ -37,10 +38,10 @@ object PasswordResetCodes : Table("passwordresetcodes") {
 
             return FunctionResult.Success(codeValue)
         } catch (sqlEx: SQLException) {
-            println("Get an sql exception while adding password reset code: $sqlEx")
+            LogWriter.log("addResetCode - Get an sql exception while adding password reset code: $sqlEx")
             return FunctionResult.Error("Get an sql exception while adding password reset code: $sqlEx")
         } catch (ex: Exception) {
-            println("Get an exception while adding password reset code: $ex")
+            LogWriter.log("addResetCode - Get an exception while adding password reset code: $ex")
             return FunctionResult.Error("Get an exception while adding password reset code: $ex")
         }
     }
@@ -76,16 +77,16 @@ object PasswordResetCodes : Table("passwordresetcodes") {
 
             return OperationResult.Success(Unit)
         } catch (e: IllegalArgumentException) {
-            println("Wrong otp code: ${e.message}")
+            LogWriter.log("validateAndUseResetCode - Wrong otp code: ${e.message}")
             return OperationResult.UserError(e.message ?: "Неверный код подтверждения")
         } catch (e: IllegalStateException) {
-            println("Can't use otp due to: ${e.message}")
+            LogWriter.log("validateAndUseResetCode - Can't use otp due to: ${e.message}")
             return OperationResult.UserError(e.message ?: "Невозможно использовать код")
         } catch (sqlEx: SQLException) {
-            println("SQL exception during validateAndUseResetCode: $sqlEx")
+            LogWriter.log("validateAndUseResetCode - SQL exception during validateAndUseResetCode: $sqlEx")
             return OperationResult.ServerError(message = "Ошибка базы данных: ${sqlEx.message}")
         } catch (ex: Exception) {
-            println("Exception during validateAndUseResetCode: $ex")
+            LogWriter.log("validateAndUseResetCode - Exception during validateAndUseResetCode: $ex")
             return OperationResult.ServerError(message = "Внутренняя ошибка: ${ex.message}")
         }
     }

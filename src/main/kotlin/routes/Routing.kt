@@ -3,11 +3,13 @@ package com.example.routes
 import com.example.*
 import com.example.daos.*
 import com.example.data.*
-import com.example.handlers.*
+import com.example.handlers.OTPRequestHandler
+import com.example.handlers.userItemCreationHandler
 import com.example.security.JWTConfig
 import com.example.utils.FunctionResult
 import com.example.utils.Helpers
 import com.example.utils.OperationResult
+import com.example.utils.logging.LogWriter
 import io.ktor.http.*
 import io.ktor.http.content.*
 import io.ktor.server.application.*
@@ -19,11 +21,9 @@ import io.ktor.server.routing.*
 import io.ktor.utils.io.jvm.javaio.*
 import io.minio.http.Method
 import kotlinx.serialization.json.Json
-import org.jetbrains.exposed.sql.Except
-import org.koin.ktor.ext.get
-import org.w3c.dom.Text
 import java.net.URLConnection
 import java.util.*
+import kotlin.collections.set
 
 fun Application.configureRouting() {
     routing {
@@ -32,19 +32,19 @@ fun Application.configureRouting() {
             val userRequest = call.receive<RegisterUser>()
 
             if (userRequest.username == "") {
-                println("username issue")
+                LogWriter.log("post /register/local - username issue")
                 call.respond(HttpStatusCode.BadRequest)
                 return@post
             }
 
             if (userRequest.password == "") {
-                println("password issue")
+                LogWriter.log("post /register/local - password issue")
                 call.respond(HttpStatusCode.BadRequest)
                 return@post
             }
 
             if (userRequest.userEmail?.matches(Regex("^[A-Za-z0-9+_.-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}\$")) == false) {
-                println("email issue")
+                LogWriter.log("post /register/local - email issue")
                 call.respond(HttpStatusCode.BadRequest)
                 return@post
             }
@@ -261,6 +261,32 @@ fun Application.configureRouting() {
                 }
             }
 
+            post("/provide_feedback") {
+                val principal = call.principal<JWTPrincipal>()
+                val userId = Helpers.getUserUidFromToken(principal)
+
+                if (userId != null) {
+                    try {
+                        val feedbackInstance = call.receive<Feedback>()
+
+                        when (val result = UsersFeedback.addFeedback(feedbackInstance)) {
+                            is FunctionResult.Error -> {
+                                call.respond(HttpStatusCode.InternalServerError, mapOf("error" to result.message))
+                            }
+
+                            is FunctionResult.Success -> {
+                                call.respond(HttpStatusCode.OK)
+                            }
+                        }
+
+                    } catch (ex: Exception) {
+                        call.respond(HttpStatusCode.InternalServerError, mapOf("error" to ex.message))
+                    }
+                } else {
+                    call.respond(HttpStatusCode.Unauthorized, "Bad credentials")
+                }
+            }
+
 
             post("/create") {
                 val principal = call.principal<JWTPrincipal>()
@@ -282,7 +308,7 @@ fun Application.configureRouting() {
 
                         return@post
                     } catch (ex: Exception) {
-                        println("Get and exception: ${ex.message}")
+                        LogWriter.log("post /create - Get and exception: ${ex.message}")
                         call.respond(HttpStatusCode.BadRequest, mapOf("error" to ex.message))
                         return@post
                     }
@@ -302,7 +328,7 @@ fun Application.configureRouting() {
                         val metadataPart = multipart.readPart()
                         if (metadataPart !is PartData.FormItem || metadataPart.name != "metadata") {
                             metadataPart?.dispose?.let { it() }
-                            println("Part with metadata should go first")
+                            LogWriter.log("post /upload - Part with metadata should go first")
                             call.respond(HttpStatusCode.BadRequest, "Part with metadata should go first")
                             return@post
                         }
@@ -312,7 +338,7 @@ fun Application.configureRouting() {
                         val fileStreamPart = multipart.readPart()
                         if (fileStreamPart !is PartData.FileItem || fileStreamPart.name != "file") {
                             fileStreamPart?.dispose?.let { it() }
-                            println("Error while getting file stream part. Mb error with naming. Current name is ${fileStreamPart?.name ?: "Name is empty"}")
+                            LogWriter.log("post /upload - Error while getting file stream part. Mb error with naming. Current name is ${fileStreamPart?.name ?: "Name is empty"}")
                             call.respond(HttpStatusCode.BadRequest, "Error while getting file stream part")
                             return@post
                         }
@@ -371,7 +397,7 @@ fun Application.configureRouting() {
                         call.respond(HttpStatusCode.OK, "File wroted successfully with uid ${createInstance.data.uid}")
                         return@post
                     } catch (ex: Exception) {
-                        println("Get and exception in upload method: $ex")
+                        LogWriter.log("post /upload - Get and exception in upload method: $ex")
                         call.respond(HttpStatusCode.InternalServerError, mapOf("error" to ex.message))
                         return@post
                     }
@@ -422,7 +448,7 @@ fun Application.configureRouting() {
                         }
                     }
                 } catch (ex: Exception) {
-                    println("Get an exception: $ex")
+                    LogWriter.log("get /items/download/{uid} - Get an exception: $ex")
                     call.respond(HttpStatusCode.InternalServerError, mapOf("error" to ex.message))
                     return@get
                 }
@@ -460,7 +486,7 @@ fun Application.configureRouting() {
                             if (isOwned.data) {
                                 val updateInstance = call.receive<UpdateRequest>()
                                 if (updateInstance == null) {
-                                    println("Update instance is null")
+                                    LogWriter.log("put /update/{uid} - Update instance is null")
                                     return@put
                                 }
 
@@ -508,7 +534,7 @@ fun Application.configureRouting() {
                         }
                     }
                 } catch (ex: Exception) {
-                    println("Get an exception: $ex")
+                    LogWriter.log("put /update/{uid} - Get an exception: $ex")
                     call.respond(HttpStatusCode.InternalServerError, mapOf("error" to ex.message))
                     return@put
                 }
@@ -526,7 +552,6 @@ fun Application.configureRouting() {
                 }
 
                 try {
-                    println("get in user items")
                     val result = UserItemsTable.getUserItems(userId)
 
                     when (result) {
@@ -540,7 +565,7 @@ fun Application.configureRouting() {
 
                     return@get
                 } catch (ex: Exception) {
-                    println("Get an exception: ${ex.message}")
+                    LogWriter.log("get /items - Get an exception: ${ex.message}")
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to ex.message))
                 }
             }
@@ -609,7 +634,7 @@ fun Application.configureRouting() {
 
 
                 } catch (ex: Exception) {
-                    println("Get an exception: ${ex.message}")
+                    LogWriter.log("get /items/{uid} - Get an exception: ${ex.message}")
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to ex.message))
                 }
             }
@@ -663,7 +688,7 @@ fun Application.configureRouting() {
                         }
                     }
                 } catch (ex: Exception) {
-                    println("Get an exception: ${ex.message}")
+                    LogWriter.log("patch /items/{uid}/soft_delete - Get an exception: ${ex.message}")
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to ex.message))
                 }
             }
@@ -716,7 +741,7 @@ fun Application.configureRouting() {
                         }
                     }
                 } catch (ex: Exception) {
-                    println("Get an exception: ${ex.message}")
+                    LogWriter.log("delete items/{uid}/delete_permanent - Get an exception: ${ex.message}")
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to ex.message))
                 }
             }
@@ -769,7 +794,7 @@ fun Application.configureRouting() {
                         }
                     }
                 } catch (ex: Exception) {
-                    println("Get an exception: ${ex.message}")
+                    LogWriter.log("patch /items/{uid}/restore - Get an exception: ${ex.message}")
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to ex.message))
                 }
             }
@@ -797,7 +822,7 @@ fun Application.configureRouting() {
 
                     return@get
                 } catch (ex: Exception) {
-                    println("Get an exception: ${ex.message}")
+                    LogWriter.log("get /items/deleted - Get an exception: ${ex.message}")
                     call.respond(HttpStatusCode.BadRequest, mapOf("error" to ex.message))
                 }
             }

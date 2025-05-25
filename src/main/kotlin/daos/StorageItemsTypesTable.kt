@@ -1,5 +1,6 @@
 package com.example.daos
 
+import com.example.utils.logging.LogWriter
 import org.jetbrains.exposed.sql.Table
 import org.jetbrains.exposed.sql.selectAll
 import org.jetbrains.exposed.sql.transactions.transaction
@@ -26,7 +27,7 @@ object StorageItemsTypesTable: Table("storageitemtypes") {
                     }
             }
         } catch (ex: Exception) {
-            println("Get an exception in getStorageTypes : $ex")
+            LogWriter.log("Get an exception in getStorageTypes : $ex")
             null
         }
     }

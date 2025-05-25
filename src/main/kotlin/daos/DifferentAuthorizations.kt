@@ -1,5 +1,6 @@
 package com.example.daos
 
+import com.example.utils.logging.LogWriter
 import org.jetbrains.exposed.sql.Table
 import org.jetbrains.exposed.sql.and
 import org.jetbrains.exposed.sql.insert
@@ -24,10 +25,10 @@ object DifferentAuthorizations : Table("differentauthorizations") {
                 }[accountId]
             }
         } catch (sqlEx: SQLException) {
-            println("Get an sql exception: $sqlEx")
+            LogWriter.log("addUser - Get an sql exception: $sqlEx")
             null
         } catch (ex: Exception) {
-            println("Get an exception: $ex")
+            LogWriter.log("addUser - Get an exception: $ex")
             null
         }
     }
@@ -44,10 +45,10 @@ object DifferentAuthorizations : Table("differentauthorizations") {
                     ?.get(DifferentAuthorizations.userId)
             }
         } catch (sqlEx: SQLException) {
-            println("Get an sql exception: $sqlEx")
+            LogWriter.log("isThereAreUser - Get an sql exception: $sqlEx")
             null
         } catch (ex: Exception) {
-            println("Get an exception: $ex")
+            LogWriter.log("isThereAreUser - Get an exception: $ex")
             null
         }
     }

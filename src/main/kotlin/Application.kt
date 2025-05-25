@@ -5,6 +5,7 @@ import com.example.database.initDatabase
 import com.example.routes.configureRouting
 import com.example.routes.configureSockets
 import com.example.security.configureSecurity
+import com.example.utils.logging.LogWriter
 import io.ktor.serialization.kotlinx.json.json
 import io.ktor.server.application.*
 import io.ktor.server.plugins.contentnegotiation.ContentNegotiation
@@ -41,4 +42,10 @@ fun Application.module() {
     configureSockets()
     configureFrameworks()
     configureRouting()
+
+    Runtime.getRuntime().addShutdownHook(
+        Thread {
+            LogWriter.shutdown()
+        }
+    )
 }

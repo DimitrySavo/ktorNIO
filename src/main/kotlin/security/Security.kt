@@ -3,6 +3,7 @@ package com.example.security
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import com.example.daos.Users
+import com.example.utils.logging.LogWriter
 import io.ktor.http.*
 import io.ktor.server.application.*
 import io.ktor.server.auth.*
@@ -40,7 +41,7 @@ fun Application.configureSecurity() {
                         null
                     }
                 } catch (ex: Exception) {
-                    println("Get an exception: $ex")
+                    LogWriter.log("JWT verifier - get an exception $ex")
                     null
                 }
             }
@@ -72,7 +73,7 @@ fun Application.configureSecurity() {
                         null
                     }
                 } catch (ex: Exception) {
-                    println("Get an exception")
+                    LogWriter.log("JWT verifier - Get an exception")
                     null
                 }
             }
@@ -104,7 +105,7 @@ fun Application.configureSecurity() {
                         null
                     }
                 } catch (ex: Exception) {
-                    println("Get an exception")
+                    LogWriter.log("JWT verifier - Get an exception")
                     null
                 }
             }

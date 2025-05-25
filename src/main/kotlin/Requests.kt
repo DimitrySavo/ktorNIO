@@ -117,6 +117,16 @@ data class FileDownloadUrl(
 )
 
 @Serializable
+data class Feedback(
+    @Serializable(with = UUIDSerializer::class)
+    val userUid : UUID,
+    val username : String,
+    val rating : Int,
+    val title : String? = null,
+    val body: String? = null
+)
+
+@Serializable
 data class ItemContent(
     val version: String,
     val content: String

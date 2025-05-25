@@ -11,7 +11,7 @@ fun Application.configureFrameworks() {
         modules(module {
             single<HelloService> {
                 HelloService {
-                    println(environment.log.info("Hello, World!"))
+
                 }
             }
         })

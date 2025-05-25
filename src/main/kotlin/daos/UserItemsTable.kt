@@ -9,6 +9,7 @@ import com.example.data.deleteFileInMinio
 import com.example.data.readFromFile
 import com.example.data.replaceFileMinio
 import com.example.utils.Locker
+import com.example.utils.logging.LogWriter
 import com.example.utils.theewaysmerge.ThreeWayMerge
 import org.jetbrains.exposed.sql.*
 import org.jetbrains.exposed.sql.SqlExpressionBuilder.eq
@@ -60,35 +61,13 @@ object UserItemsTable : Table("useritems") {
                     }
                 }
             }
-            println("Created db item successfully")
+            LogWriter.log("createItem - Created db item successfully")
             FunctionResult.Success("Created ok with uid: $uid")
         } catch (ex: SQLException) {
-            println("Get an sql exception: $ex")
+            LogWriter.log("createItem - Get an sql exception: $ex")
             FunctionResult.Error("Sql exception")
         } catch (ex: Exception) {
-            println("Get exception: $ex")
-            FunctionResult.Error("Get exception")
-        }
-    }
-
-    fun checkIsThereAnItem(uid: UUID): FunctionResult<Unit> {
-        return try {
-            val result = transaction {
-                UserItemsTable.select(UserItemsTable.uid)
-                    .where { UserItemsTable.uid eq uid }
-                    .firstOrNull() != null
-            }
-
-            if (result) {
-                FunctionResult.Success(Unit)
-            } else {
-                FunctionResult.Error("Can't find item with such uid")
-            }
-        } catch (ex: SQLException) {
-            println("Get an sql exception: $ex")
-            FunctionResult.Error("Sql exception")
-        } catch (ex: Exception) {
-            println("Get exception: $ex")
+            LogWriter.log("createItem - Get exception: $ex")
             FunctionResult.Error("Get exception")
         }
     }
@@ -126,16 +105,16 @@ object UserItemsTable : Table("useritems") {
                     it[deleted_at] = Instant.now()
                 }
             }
-            println("Soft deleted db item successfully")
+            LogWriter.log("softItemDeletion - Soft deleted db item successfully")
             FunctionResult.Success(Unit)
         } catch (ex: Locker.ResourceLockException) {
-            println("softItemDeletion function resource lock exception: $ex")
+            LogWriter.log("softItemDeletion - softItemDeletion function resource lock exception: $ex")
             return FunctionResult.Error("Can't lock resource right now")
         } catch (ex: SQLException) {
-            println("Get sql exception: ${ex.message}")
+            LogWriter.log("softItemDeletion - Get sql exception: ${ex.message}")
             FunctionResult.Error(ex.toString())
         } catch (ex: Exception) {
-            println("Get exception: ${ex.message}")
+            LogWriter.log("softItemDeletion - Get exception: ${ex.message}")
             FunctionResult.Error(ex.toString())
         }
     }
@@ -152,13 +131,13 @@ object UserItemsTable : Table("useritems") {
                     it[UserItemsTable.parent_id] = instance.parentUid
                 }
             }
-            println("updateMetadata successfully updated $updateCount rows")
+            LogWriter.log("updateMetadata - successfully updated $updateCount rows")
             FunctionResult.Success(Unit)
         } catch (ex: Locker.ResourceLockException) {
-            println("updateMetadata function resource lock exception: $ex")
+            LogWriter.log("updateMetadata - function resource lock exception: $ex")
             return FunctionResult.Error("Can't lock resource right now")
         } catch (ex: Exception) {
-            println("updateMetadata function exception: $ex")
+            LogWriter.log("updateMetadata - function exception: $ex")
             FunctionResult.Error("Can't find item or internal server error")
         }
     }
@@ -187,7 +166,7 @@ object UserItemsTable : Table("useritems") {
                     //3way merge item
                     when (val serverText = readFromFile(itemUUID.toString())) {
                         is FunctionResult.Error -> {
-                            println("Can't read file from minio with uid = $itemUUID")
+                            LogWriter.log("updateTextFile - Can't read file from minio with uid = $itemUUID")
                             return@withAdvisoryLock serverText
                         }
 
@@ -199,7 +178,7 @@ object UserItemsTable : Table("useritems") {
                                     user = instance.content
                                 )
 
-                            println("Content for user $userUid is merged: $mergeResult\n")
+                            LogWriter.log("updateTextFile - Content for user $userUid is merged: $mergeResult\n")
 
                             return@withAdvisoryLock storeAndUpdateVersion(
                                 itemUUID = itemUUID,
@@ -211,10 +190,10 @@ object UserItemsTable : Table("useritems") {
                 }
             }
         } catch (ex: Locker.ResourceLockException) {
-            println("updateTextFile function resource lock exception: $ex")
+            LogWriter.log("updateTextFile - function resource lock exception: $ex")
             return FunctionResult.Error("Can't lock resource right now")
         } catch (ex: Exception) {
-            println("updateTextFile function exception: $ex")
+            LogWriter.log("updateTextFile - function exception: $ex")
             FunctionResult.Error("Can't find item or internal server error")
         }
     }
@@ -242,7 +221,6 @@ object UserItemsTable : Table("useritems") {
     }
 
     private fun ResultRow.toStorageItemResponse(): StorageItemResponse {
-        println("Row is: $this")
         return StorageItemResponse(
             uid = this[uid],
             parent_id = this[parent_id],
@@ -264,19 +242,16 @@ object UserItemsTable : Table("useritems") {
                     .toList()
             }
 
-            println("Raw rows: $rawRows")
-
             val items = transaction {
                 (UserItemsTable innerJoin StorageItemsTypesTable)
                     .selectAll()
                     .where { (owner_id eq userId) and (deleted_at.isNull()) }
                     .map { row -> row.toStorageItemResponse() }
             }
-            println(items.toString())
 
             FunctionResult.Success(items)
         } catch (ex: Exception) {
-            println("Get an exception ${ex.message}")
+            LogWriter.log("getUserItems - Get an exception ${ex.message}")
             FunctionResult.Error(ex.toString())
         }
     }
@@ -289,11 +264,10 @@ object UserItemsTable : Table("useritems") {
                     .where { (owner_id eq userId) and (deleted_at.isNotNull()) }
                     .map { row -> row.toStorageItemResponse() }
             }
-            println(items.toString())
 
             FunctionResult.Success(items)
         } catch (ex: Exception) {
-            println("Get an exception ${ex.message}")
+            LogWriter.log("getDeletedUserItems - Get an exception ${ex.message}")
             FunctionResult.Error(ex.toString())
         }
     }
@@ -315,10 +289,10 @@ object UserItemsTable : Table("useritems") {
                 }
             }
         } catch (ex: Locker.ResourceLockException) {
-            println("permanentDeleteItem function resource lock exception: $ex")
+            LogWriter.log("permanentDeleteItem - function resource lock exception: $ex")
             FunctionResult.Error("Can't lock resource right now")
         } catch (ex: Exception) {
-            println("permanentDeleteItem function exception: $ex")
+            LogWriter.log("permanentDeleteItem - function exception: $ex")
             FunctionResult.Error("Can't delete item for some reason")
         }
     }
@@ -362,10 +336,10 @@ object UserItemsTable : Table("useritems") {
                 }
             }
         } catch (ex: Locker.ResourceLockException) {
-            println("restoreDeletedItem function resource lock exception: $ex")
+            LogWriter.log("restoreDeletedItem - function resource lock exception: $ex")
             FunctionResult.Error("Can't lock resource right now")
         } catch (ex: Exception) {
-            println("restoreDeletedItem function exception: $ex")
+            LogWriter.log("restoreDeletedItem - function exception: $ex")
             FunctionResult.Error("Can't delete item for some reason")
         }
     }
@@ -417,7 +391,7 @@ object UserItemsTable : Table("useritems") {
                 )
             }
         } catch (ex: Exception) {
-            println("Get an exception: $ex")
+            LogWriter.log("isItemOwnedByUser - Get an exception: $ex")
             return FunctionResult.Error("Get an exception: $ex")
         }
     }
