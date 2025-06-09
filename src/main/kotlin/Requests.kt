@@ -91,7 +91,7 @@ data class MetadataUpdateRequest(
 @Serializable
 @SerialName("text")
 data class TextUpdateRequest(
-    val version: String?,
+    val version: String? = null,
     val baseline: String,
     val content: String
 ) : UpdateRequest()

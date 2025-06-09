@@ -156,7 +156,6 @@ object UserItemsTable : Table("useritems") {
 
                 if (serverVersion == instance.version || serverVersion == null) {
                     //replace item
-
                     return@withAdvisoryLock storeAndUpdateVersion(
                         itemUUID = itemUUID,
                         content = instance.content,
