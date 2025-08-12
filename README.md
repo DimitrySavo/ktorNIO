@@ -1,85 +1,39 @@
-# ktorNIO
+# NIO — Notes Input Output
 
-This project was created using the [Ktor Project Generator](https://start.ktor.io).
+Серверное приложение для синхронизации заметок между устройствами с поддержкой разрешения конфликтов и управления пользователями.
 
-Here are some useful links to get you started:
+## 📌 О проекте
 
-- [Ktor Documentation](https://ktor.io/docs/home.html)
-- [Ktor GitHub page](https://github.com/ktorio/ktor)
-- The [Ktor Slack chat](https://app.slack.com/client/T09229ZC6/C0A974TJ9). You'll need
-  to [request an invite](https://surveys.jetbrains.com/s3/kotlin-slack-sign-up) to join.
+**NIO** — это backend-сервис, обеспечивающий безопасную и надёжную синхронизацию заметок пользователей между их устройствами.  
+Поддерживает регистрацию, авторизацию, загрузку медиа и автоматическое разрешение конфликтов при редактировании с разных устройств.
 
-## Features
+## ✨ Возможности
 
-Here's a list of features included in this project:
+- 🔐 Регистрация пользователей через **email** и **OAuth** (Google, VK)
+- ✅ Подтверждение аккаунта по email с кодом
+- 📂 Создание папок для заметок
+- 📝 Создание и редактирование текстовых заметок
+- 📎 Загрузка медиа-контента (фото, видео, аудио)
+- 🔄 Разрешение конфликтов при слиянии заметок (на базе **JGit**)
 
-| Name                                                                   | Description                                                                        |
-|------------------------------------------------------------------------|------------------------------------------------------------------------------------|
-| [Routing](https://start.ktor.io/p/routing)                             | Provides a structured routing DSL                                                  |
-| [Authentication](https://start.ktor.io/p/auth)                         | Provides extension point for handling the Authorization header                     |
-| [Content Negotiation](https://start.ktor.io/p/content-negotiation)     | Provides automatic content conversion according to Content-Type and Accept headers |
-| [WebSockets](https://start.ktor.io/p/ktor-websockets)                  | Adds WebSocket protocol support for bidirectional client connections               |
-| [GSON](https://start.ktor.io/p/ktor-gson)                              | Handles JSON serialization using GSON library                                      |
-| [kotlinx.serialization](https://start.ktor.io/p/kotlinx-serialization) | Handles JSON serialization using kotlinx.serialization library                     |
-| [Exposed](https://start.ktor.io/p/exposed)                             | Adds Exposed database to your application                                          |
-| [Koin](https://start.ktor.io/p/koin)                                   | Provides dependency injection                                                      |
+## 🛠️ Технологии
 
-## Building & Running
+- **Kotlin** — основной язык разработки
+- **Ktor** — фреймворк для серверной части
+- **JGit** — разрешение конфликтов при слиянии заметок
+- **PostgreSQL** — база данных
+- **Exposed** — ORM для работы с БД
+- **HikariCP** — пул соединений с БД
+- **MinIO** — объектное хранилище медиафайлов
+- **Docker** + **Nginx** — деплой и проксирование
+- **Simple Java Mail** — отправка писем пользователям
 
-To build or run the project, use one of the following tasks:
+## 📦 Статус разработки
 
-| Task                          | Description                                                          |
-|-------------------------------|----------------------------------------------------------------------|
-| `./gradlew test`              | Run the tests                                                        |
-| `./gradlew build`             | Build everything                                                     |
-| `buildFatJar`                 | Build an executable JAR of the server with all dependencies included |
-| `buildImage`                  | Build the docker image to use with the fat JAR                       |
-| `publishImageToLocalRegistry` | Publish the docker image locally                                     |
-| `run`                         | Run the server                                                       |
-| `runDocker`                   | Run using the local docker image                                     |
+🚧 Pet-проект в активной разработке.  
+На данный момент реализована базовая функциональность синхронизации и управления пользователями.
+Ведется работа над реализацией коллективного редактирования. Планируется полный переход с JGit на CRDT-библиотеку. 
 
-If the server starts successfully, you'll see the following output:
+## 🔗 Связанные проекты и ресурсы
 
-```
-2024-12-04 14:32:45.584 [main] INFO  Application - Application started in 0.303 seconds.
-2024-12-04 14:32:45.682 [main] INFO  Application - Responding at http://0.0.0.0:8080
-```
-
-
-
-## Database script
-
-```
-create table authtypes
-(
-    authtypeid   integer     not null
-        constraint authtypes_pk
-            primary key,
-    authtypename varchar(30) not null
-);
-
-alter table authtypes
-    owner to postgres;
-
-create table users
-(
-    userid     serial
-        primary key,
-    username   varchar(100)          not null,
-    useremail  varchar(255),
-    password   varchar(255),
-    authtype   integer               not null
-        constraint users_authtypes_authtypeid_fk
-            references authtypes,
-    isapproved boolean default false not null
-);
-
-alter table users
-    owner to postgres;
-
-
-insert into authtypes(authtypeid, authtypename) VALUES (1, 'local');
-insert into authtypes(authtypeid, authtypename) VALUES (2, 'vk');
-insert into authtypes(authtypeid, authtypename) VALUES (3, 'google');
-```
-
+- [Утилиты и скрипты](https://github.com/DimitrySavo/KtorNIOUtils) — SQL-скрипт для базы данных, вспомогательные инструменты
